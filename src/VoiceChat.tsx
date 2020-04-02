@@ -144,6 +144,8 @@ export const VoiceChat = () => {
   const refMediaStreamManager = useRef<MediaStreamManager>();
   const refAudioEl = useRef<HTMLMediaElement | null>(null);
   const refAudioElBach = useRef<HTMLMediaElement | null>(null);
+  const refWebSocket = useRef<WebSocket>();
+  const refPeerConnection = useRef<RTCPeerConnection>();
 
   const log = (msg: any) => {
     console.log(msg);
@@ -166,54 +168,71 @@ export const VoiceChat = () => {
           }
         ]
       });
+      refPeerConnection.current = peerConnection;
 
-      peerConnection.onnegotiationneeded = event => {
-        console.log("peerConnection::negotiationneeded", event);
+      const createOffer = async (): Promise<void> => {
+        if (!refMediaStreamManager.current) {
+          throw new Error("no refMediaStreamManager");
+        }
+        const mediaStream = refMediaStreamManager.current.getStream();
+        const audioTracks = mediaStream.getAudioTracks();
+        for (const track of audioTracks) {
+          peerConnection.addTrack(track);
+        }
+        log("peerConnection::createOffer");
+
+        log("peerConnection::createOffer_created");
+        await peerConnection.setLocalDescription(
+          await peerConnection.createOffer()
+        );
       };
 
-      const mediaStream = refMediaStreamManager.current.getStream();
-      const audioTracks = mediaStream.getAudioTracks();
-      for (const track of audioTracks) {
-        peerConnection.addTrack(track);
-      }
-
-      log("peerConnection::createOffer");
-      const sessionDescription = await peerConnection.createOffer();
-      log("peerConnection::createOffer_created");
-      peerConnection.setLocalDescription(sessionDescription);
+      await createOffer();
 
       peerConnection.oniceconnectionstatechange = event => {
         log(
-          `peerConnection::onIceConnectionStateChange ${
-            peerConnection.iceConnectionState
-          }`
+          `peerConnection::onIceConnectionStateChange ${peerConnection.iceConnectionState}`
         );
       };
 
       peerConnection.onicecandidate = async event => {
+        if (!refWebSocket.current) {
+          throw new Error("no ws transport");
+        }
         log("peerConnection::onIceCandidate");
         if (event.candidate === null) {
-          const apiUrl = "https://cap.chat";
+          // const apiUrl = "https://cap.chat";
           try {
             log("peerConnection::onIceCandidate::sendOfferRequest");
-            const res = await fetch(`${apiUrl}/offer`, {
-              method: "POST",
-              body: JSON.stringify(peerConnection.localDescription)
-            });
-            const json = await res.json();
-            console.log("offer request sent", json);
-            log("peerConnection::onIceCandidate::sendOfferRequest::accepted");
-            peerConnection.setRemoteDescription(
-              new RTCSessionDescription(json)
+
+            console.log(peerConnection.localDescription);
+            refWebSocket.current.send(
+              JSON.stringify({
+                type: "offer",
+                offer: peerConnection.localDescription
+                // offer: peerConnection
+              })
             );
+
+            // const res = await fetch(`${apiUrl}/offer`, {
+            //   method: "POST",
+            //   body: JSON.stringify(peerConnection.localDescription)
+            // });
+            // const json = await res.json();
+            // console.log("offer request sent", json);
+            log("peerConnection::onIceCandidate::sendOfferRequest::accepted");
+            // peerConnection.setRemoteDescription(
+            //   new RTCSessionDescription(json)
+            // );
           } catch (error) {
             console.error(error);
           }
         }
       };
 
-      peerConnection.addEventListener("negotiationneeded", event => {
+      peerConnection.addEventListener("negotiationneeded", async event => {
         console.log("peerConnection::negotiationneeded", event);
+        await createOffer();
       });
       peerConnection.ontrack = async event => {
         log(`peerConnection::ontrack ${event.track.kind}`);
@@ -239,25 +258,33 @@ export const VoiceChat = () => {
 
   useEffect(() => {
     const ws = new WebSocket("wss://cap.chat/ws");
+    refWebSocket.current = ws;
     const handleOpen = () => {
       console.log("web socket connection is open");
-      setTimeout(() => {
-        // ws.send("hello world");
-        ws.send(
-          JSON.stringify({
-            type: "offer",
-            offer: {
-              sdp: "213123123212132"
-            }
-          })
-        );
-      }, 5000);
     };
     const handleClose = () => {
       console.log("web socket connection is closed");
     };
     const handleMessage = (event: MessageEvent) => {
-      console.log("web socket message", event.data);
+      try {
+        console.log("web socket message", event.data);
+        interface VoiceChatEvent {
+          type: "offer" | "answer";
+
+          offer?: RTCSessionDescription;
+          answer?: RTCSessionDescription;
+        }
+        const data = JSON.parse(event.data) as VoiceChatEvent;
+        if (data.type === "answer" && data.answer) {
+          if (refPeerConnection.current) {
+            refPeerConnection.current.setRemoteDescription(
+              new RTCSessionDescription(data.answer)
+            );
+          }
+        }
+      } catch (error) {
+        console.error(error);
+      }
     };
     const handleError = (event: Event) => {
       console.log("ws error", event);
@@ -266,10 +293,12 @@ export const VoiceChat = () => {
     ws.addEventListener("close", handleClose);
     ws.addEventListener("message", handleMessage);
     ws.addEventListener("error", handleError);
-
     return () => {
+      ws.removeEventListener("open", handleOpen);
+      ws.removeEventListener("close", handleClose);
+      ws.removeEventListener("message", handleMessage);
+      ws.removeEventListener("error", handleError);
     };
-    
   }, []);
 
   useEffect(() => {
