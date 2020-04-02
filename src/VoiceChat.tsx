@@ -257,7 +257,9 @@ export const VoiceChat = () => {
   };
 
   useEffect(() => {
-    const ws = new WebSocket("wss://cap.chat/ws");
+    const ws = new WebSocket(
+      `wss://cap.chat/${window.location.pathname.replace("/", "")}`
+    );
     refWebSocket.current = ws;
     const handleOpen = () => {
       console.log("web socket connection is open");
