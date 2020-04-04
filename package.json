@@ -1,13 +1,14 @@
 {
   "name": "webrtc-voice-chat",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "",
   "keywords": [],
   "main": "src/index.tsx",
   "dependencies": {
     "react": "16.13.1",
     "react-dom": "16.13.1",
-    "react-scripts": "3.4.1"
+    "react-scripts": "3.4.1",
+    "rxjs": "6.5.5"
   },
   "devDependencies": {
     "@types/react": "16.9.19",
