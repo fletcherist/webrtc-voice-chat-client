@@ -134,6 +134,114 @@ class MediaStreamManager {
   }
 }
 
+const useWebSocket = (): {
+  connect: (url: string) => Promise<void>;
+  io: WebSocket | undefined;
+} => {
+  const refWebSocket = useRef<WebSocket>();
+
+  const defaultConnectUrl = `wss://cap.chat/${window.location.pathname.replace(
+    "/",
+    ""
+  )}`;
+  return {
+    connect: (url: string = defaultConnectUrl): Promise<void> => {
+      return new Promise((resolve, reject) => {
+        refWebSocket.current = new WebSocket(url);
+        refWebSocket.current.addEventListener("open", () => resolve());
+        refWebSocket.current.addEventListener("error", () => reject());
+        return;
+      });
+    },
+    io: refWebSocket.current
+  };
+};
+
+const usePeerConnection = ({
+  transport
+}: {
+  transport: {
+    sendOffer: (sessionDescription: RTCSessionDescription) => Promise<void>;
+  };
+}): RTCPeerConnection => {
+  const refPeerConnection = useRef<RTCPeerConnection>(
+    new RTCPeerConnection({
+      iceServers: [
+        {
+          urls: "stun:stun.l.google.com:19302"
+        }
+      ]
+    })
+  );
+  const peerConnection = refPeerConnection.current;
+
+  useEffect(() => {
+    const handleTrack = async (event: RTCTrackEvent) => {
+      console.log(event);
+      console.log(`peerConnection::ontrack ${event.track.kind}`);
+      console.log(event.track.kind, event.streams);
+      const stream = event.streams[0];
+
+      const audioEl = document.createElement("audio");
+
+      console.log("attached speaker volume");
+      try {
+        // if (refAudioEl.current) {
+        //   refAudioEl.current.srcObject = stream;
+        //   refAudioEl.current.autoplay = true;
+        //   refAudioEl.current.controls = true;
+        //   await refAudioEl.current.play();
+        // }
+        audioEl.srcObject = stream;
+        audioEl.autoplay = true;
+        audioEl.controls = true;
+        document.querySelector("#tracks")?.appendChild(audioEl);
+        await audioEl.play();
+      } catch (error) {
+        console.log(error);
+      }
+    };
+    const handleConnectionStateChange = (event: Event) => {
+      console.log(
+        `peerConnection::onIceConnectionStateChange ${peerConnection.iceConnectionState}`
+      );
+    };
+    const handleICECandidate = (event: RTCPeerConnectionIceEvent) => {};
+
+    peerConnection.addEventListener("track", handleTrack);
+    peerConnection.addEventListener(
+      "iceconnectionstatechange",
+      handleConnectionStateChange
+    );
+
+    peerConnection.addEventListener("negotiationneeded", async event => {
+      console.log("peerConnection::negotiationneeded", event);
+
+      console.log(0);
+      await peerConnection.setLocalDescription(
+        await peerConnection.createOffer()
+      );
+      console.log(1);
+      if (!peerConnection.localDescription) {
+        throw new Error("no local description");
+      }
+      transport.sendOffer(peerConnection.localDescription);
+      console.log(2);
+    });
+
+    return () => {
+      peerConnection.removeEventListener("track", handleTrack);
+      peerConnection.removeEventListener(
+        "connectionstatechange",
+        handleConnectionStateChange
+      );
+      peerConnection.removeEventListener("icecandidate", handleICECandidate);
+    };
+  }, []);
+
+  return refPeerConnection.current;
+};
+
 const DEFAULT_MIC_ENABLED = false;
 export const VoiceChat = () => {
   const refStream = useRef<MediaStream | undefined>(undefined);
@@ -145,7 +253,22 @@ export const VoiceChat = () => {
   const refAudioEl = useRef<HTMLMediaElement | null>(null);
   const refAudioElBach = useRef<HTMLMediaElement | null>(null);
   const refWebSocket = useRef<WebSocket>();
-  const refPeerConnection = useRef<RTCPeerConnection>();
+
+  const transport = {
+    sendOffer: async (sessionDescription: RTCSessionDescription) => {
+      if (!refWebSocket.current) {
+        throw new Error("transport is not ready");
+      }
+      refWebSocket.current.send(
+        JSON.stringify({
+          type: "offer",
+          offer: sessionDescription
+        })
+      );
+    }
+  };
+
+  const peerConnection = usePeerConnection({ transport });
 
   const log = (msg: any) => {
     console.log(msg);
@@ -161,20 +284,12 @@ export const VoiceChat = () => {
         refMediaStreamManager.current = new MediaStreamManager();
       }
 
-      const peerConnection = new RTCPeerConnection({
-        iceServers: [
-          {
-            urls: "stun:stun.l.google.com:19302"
-          }
-        ]
-      });
-      refPeerConnection.current = peerConnection;
-
       const createOffer = async (): Promise<void> => {
         if (!refMediaStreamManager.current) {
           throw new Error("no refMediaStreamManager");
         }
         const mediaStream = refMediaStreamManager.current.getStream();
+
         const audioTracks = mediaStream.getAudioTracks();
         for (const track of audioTracks) {
           peerConnection.addTrack(track);
@@ -188,69 +303,6 @@ export const VoiceChat = () => {
       };
 
       await createOffer();
-
-      peerConnection.oniceconnectionstatechange = event => {
-        log(
-          `peerConnection::onIceConnectionStateChange ${peerConnection.iceConnectionState}`
-        );
-      };
-
-      peerConnection.onicecandidate = async event => {
-        if (!refWebSocket.current) {
-          throw new Error("no ws transport");
-        }
-        log("peerConnection::onIceCandidate");
-        if (event.candidate === null) {
-          // const apiUrl = "https://cap.chat";
-          try {
-            log("peerConnection::onIceCandidate::sendOfferRequest");
-
-            console.log(peerConnection.localDescription);
-            refWebSocket.current.send(
-              JSON.stringify({
-                type: "offer",
-                offer: peerConnection.localDescription
-                // offer: peerConnection
-              })
-            );
-
-            // const res = await fetch(`${apiUrl}/offer`, {
-            //   method: "POST",
-            //   body: JSON.stringify(peerConnection.localDescription)
-            // });
-            // const json = await res.json();
-            // console.log("offer request sent", json);
-            log("peerConnection::onIceCandidate::sendOfferRequest::accepted");
-            // peerConnection.setRemoteDescription(
-            //   new RTCSessionDescription(json)
-            // );
-          } catch (error) {
-            console.error(error);
-          }
-        }
-      };
-
-      peerConnection.addEventListener("negotiationneeded", async event => {
-        console.log("peerConnection::negotiationneeded", event);
-        await createOffer();
-      });
-      peerConnection.ontrack = async event => {
-        log(`peerConnection::ontrack ${event.track.kind}`);
-        console.log(event.track.kind);
-        const stream = event.streams[0];
-
-        log("attached speaker volume");
-        try {
-          if (refAudioEl.current) {
-            refAudioEl.current.srcObject = stream;
-            refAudioEl.current.autoplay = true;
-            refAudioEl.current.controls = true;
-            await refAudioEl.current.play();
-          }
-        } catch (error) {
-          log(error);
-        }
-      };
     } catch (error) {
       log(error);
     }
@@ -267,9 +319,8 @@ export const VoiceChat = () => {
     const handleClose = () => {
       console.log("web socket connection is closed");
     };
-    const handleMessage = (event: MessageEvent) => {
+    const handleMessage = async (event: MessageEvent) => {
       try {
-        console.log("web socket message", event.data);
         interface VoiceChatEvent {
           type: "offer" | "answer";
 
@@ -278,11 +329,21 @@ export const VoiceChat = () => {
         }
         const data = JSON.parse(event.data) as VoiceChatEvent;
         if (data.type === "answer" && data.answer) {
-          if (refPeerConnection.current) {
-            refPeerConnection.current.setRemoteDescription(
-              new RTCSessionDescription(data.answer)
-            );
-          }
+          await peerConnection.setRemoteDescription(
+            new RTCSessionDescription(data.answer)
+          );
+        } else if (data.type === "offer" && data.offer) {
+          await peerConnection.setRemoteDescription(
+            new RTCSessionDescription(data.offer)
+          );
+          const answer = await peerConnection.createAnswer();
+          await peerConnection.setLocalDescription(answer);
+          refWebSocket.current?.send(
+            JSON.stringify({
+              type: "answer",
+              answer: answer
+            })
+          );
         }
       } catch (error) {
         console.error(error);
@@ -405,11 +466,30 @@ export const VoiceChat = () => {
           stream j.s bach
         </button>
       </div>
+      <div>
+        <button
+          onClick={async () => {
+            console.log("adding track");
+            // if (refMediaStreamManager.current) {
+            // const stream = refMediaStreamManager.current.getStream()
+            const stream = await navigator.mediaDevices.getUserMedia({
+              audio: true
+            });
+            peerConnection.addTrack(stream.getAudioTracks()[0]);
+            // }
+          }}
+        >
+          add track dynamically
+        </button>
+      </div>
       <audio
         ref={refAudioElBach}
         controls
         src="https://www.thesoundarchive.com/starwars/star-wars-cantina-song.mp3"
       />
+
+      <h1>tracks</h1>
+      <div id="tracks"></div>
 
       <div>
         <b>logs</b>
