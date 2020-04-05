@@ -243,13 +243,15 @@ const usePeerConnection = ({
 };
 
 const DEFAULT_MIC_ENABLED = false;
-export const VoiceChat = () => {
-  const refStream = useRef<MediaStream | undefined>(undefined);
+
+const Conference = () => {
   const [micEnabled, setMicEnabled] = useState<boolean>(DEFAULT_MIC_ENABLED);
   const [microphoneVolume, setMicrophoneVolume] = useState<number>(0);
   const [speakerVolume, setSpeakerVolume] = useState<number>(0);
 
-  const refMediaStreamManager = useRef<MediaStreamManager>();
+  const refMediaStreamManager = useRef<MediaStreamManager>(
+    new MediaStreamManager()
+  );
   const refAudioEl = useRef<HTMLMediaElement | null>(null);
   const refAudioElBach = useRef<HTMLMediaElement | null>(null);
   const refWebSocket = useRef<WebSocket>();
@@ -272,37 +274,18 @@ export const VoiceChat = () => {
 
   const log = (msg: any) => {
     console.log(msg);
-    const logs = document.getElementById("logs");
-    if (logs) {
-      logs.innerHTML += msg + "<br>";
-    }
   };
 
   const subscribe = async () => {
     try {
-      if (!refMediaStreamManager.current) {
-        refMediaStreamManager.current = new MediaStreamManager();
+      const mediaStream = refMediaStreamManager.current.getStream();
+
+      const audioTracks = mediaStream.getAudioTracks();
+      for (const track of audioTracks) {
+        peerConnection.addTrack(track);
       }
-
-      const createOffer = async (): Promise<void> => {
-        if (!refMediaStreamManager.current) {
-          throw new Error("no refMediaStreamManager");
-        }
-        const mediaStream = refMediaStreamManager.current.getStream();
-
-        const audioTracks = mediaStream.getAudioTracks();
-        for (const track of audioTracks) {
-          peerConnection.addTrack(track);
-        }
-        log("peerConnection::createOffer");
-
-        log("peerConnection::createOffer_created");
-        await peerConnection.setLocalDescription(
-          await peerConnection.createOffer()
-        );
-      };
-
-      await createOffer();
+      log("peerConnection::createOffer");
+      log("peerConnection::createOffer_created");
     } catch (error) {
       log(error);
     }
@@ -315,6 +298,7 @@ export const VoiceChat = () => {
     refWebSocket.current = ws;
     const handleOpen = () => {
       console.log("web socket connection is open");
+      subscribe();
     };
     const handleClose = () => {
       console.log("web socket connection is closed");
@@ -401,15 +385,6 @@ export const VoiceChat = () => {
       <audio ref={refAudioEl} controls />
       <div>
         <button
-          onClick={() => {
-            subscribe();
-          }}
-        >
-          join
-        </button>
-      </div>
-      <div>
-        <button
           onClick={async () => {
             if (refMediaStreamManager.current) {
               await refMediaStreamManager.current.requestMicrophone();
@@ -490,14 +465,6 @@ export const VoiceChat = () => {
 
       <h1>tracks</h1>
       <div id="tracks"></div>
-
-      <div>
-        <b>logs</b>
-        <br />
-        <div id="logs" />
-        <br />
-        <br />
-      </div>
       <div className={css.container}>
         <div
           className={css.speakButton}
@@ -518,4 +485,37 @@ export const VoiceChat = () => {
       </div>
     </div>
   );
+};
+
+export const VoiceChat = () => {
+  const [showConference, setShowConference] = useState<boolean>(false);
+
+  const renderContent = () => {
+    if (!showConference) {
+      return (
+        <div
+          style={{
+            height: "100vh",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center"
+          }}
+        >
+          <button
+            onClick={() => {
+              setShowConference(true);
+            }}
+            style={{
+              fontSize: 48
+            }}
+          >
+            tap to join voice chat
+          </button>
+        </div>
+      );
+    }
+
+    return <Conference />;
+  };
+  return <div>{renderContent()}</div>;
 };
