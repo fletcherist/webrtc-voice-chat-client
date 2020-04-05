@@ -475,7 +475,7 @@ export const VoiceChat = () => {
             const stream = await navigator.mediaDevices.getUserMedia({
               audio: true
             });
-            peerConnection.addTrack(stream.getAudioTracks()[0]);
+            peerConnection.addTrack(stream.getAudioTracks()[0], stream);
             // }
           }}
         >
