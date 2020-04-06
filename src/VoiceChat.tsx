@@ -134,35 +134,110 @@ class MediaStreamManager {
   }
 }
 
-const useWebSocket = (): {
-  connect: (url: string) => Promise<void>;
-  io: WebSocket | undefined;
-} => {
-  const refWebSocket = useRef<WebSocket>();
+interface Transport {
+  sendOffer: (sessionDescription: RTCSessionDescriptionInit) => void;
+  sendAnswer: (sessionDescription: RTCSessionDescriptionInit) => void;
+  sendCandidate: (candidate: RTCIceCandidate) => void;
 
-  const defaultConnectUrl = `wss://cap.chat/${window.location.pathname.replace(
-    "/",
-    ""
-  )}`;
-  return {
-    connect: (url: string = defaultConnectUrl): Promise<void> => {
-      return new Promise((resolve, reject) => {
-        refWebSocket.current = new WebSocket(url);
-        refWebSocket.current.addEventListener("open", () => resolve());
-        refWebSocket.current.addEventListener("error", () => reject());
-        return;
-      });
-    },
-    io: refWebSocket.current
-  };
-};
+  onOpen: (callback: () => void) => void;
+  onOffer: (
+    callback: (sessionDescription: RTCSessionDescriptionInit) => void
+  ) => void;
+  onAnswer: (
+    callback: (sessionDescription: RTCSessionDescriptionInit) => void
+  ) => void;
+  onCandidate: (callback: (candidate: RTCIceCandidateInit) => void) => void;
+}
+
+interface TransportEvent {
+  type: "offer" | "answer" | "candidate" | "error";
+
+  offer?: RTCSessionDescriptionInit;
+  answer?: RTCSessionDescriptionInit;
+  candidate?: RTCIceCandidateInit;
+}
+
+class WebSocketTransport implements Transport {
+  private ws: WebSocket;
+  private onOfferCallback: (
+    sessionDescription: RTCSessionDescriptionInit
+  ) => void;
+  private onAnswerCallback: (
+    sessionDescription: RTCSessionDescriptionInit
+  ) => void;
+  private onCandidateCallback: (candidate: RTCIceCandidateInit) => void;
+  private onOpenCallback: () => void;
+  constructor(path: string) {
+    this.onOfferCallback = () => undefined;
+    this.onAnswerCallback = () => undefined;
+    this.onCandidateCallback = () => undefined;
+    this.onOpenCallback = () => undefined;
+    this.ws = new WebSocket(path);
+    this.ws.addEventListener("message", event => this.onMessage(event));
+    this.ws.addEventListener("open", () => this.onOpenCallback());
+    this.ws.addEventListener("close", () => console.log("ws is closed"));
+    this.ws.addEventListener("error", error => console.error(error));
+  }
+  public sendOffer(sessionDescription: RTCSessionDescriptionInit): void {
+    this.ws.send(
+      JSON.stringify({
+        type: "answer",
+        answer: sessionDescription
+      })
+    );
+  }
+  public sendAnswer(sessionDescription: RTCSessionDescriptionInit): void {
+    this.ws.send(
+      JSON.stringify({
+        type: "offer",
+        answer: sessionDescription
+      })
+    );
+  }
+  public sendCandidate(candidate: RTCIceCandidate) {
+    this.ws.send(
+      JSON.stringify({
+        type: "candidate",
+        answer: candidate
+      })
+    );
+  }
+
+  private onMessage(event: MessageEvent) {
+    const data = JSON.parse(event.data) as TransportEvent;
+    if (data.type === "answer" && data.answer) {
+      return this.onAnswerCallback(data.answer);
+    } else if (data.type === "offer" && data.offer) {
+      return this.onOfferCallback(data.offer);
+    } else if (data.type === "candidate" && data.candidate) {
+      return this.onCandidateCallback(data.candidate);
+    } else if (data.type === "error") {
+      console.error(data);
+    } else {
+      throw new Error(`type ${data.type} not implemented`);
+    }
+  }
+
+  public onOpen(callback: () => void): void {
+    this.onOpenCallback = callback;
+  }
+  public onOffer(callback: WebSocketTransport["onOfferCallback"]): void {
+    this.onOfferCallback = callback;
+  }
+  public onAnswer(callback: WebSocketTransport["onAnswerCallback"]): void {
+    this.onAnswerCallback = callback;
+  }
+  public onCandidate(
+    callback: WebSocketTransport["onCandidateCallback"]
+  ): void {
+    this.onCandidateCallback = callback;
+  }
+}
 
 const usePeerConnection = ({
   transport
 }: {
-  transport: {
-    sendOffer: (sessionDescription: RTCSessionDescription) => Promise<void>;
-  };
+  transport: Transport;
 }): RTCPeerConnection => {
   const refPeerConnection = useRef<RTCPeerConnection>(
     new RTCPeerConnection({
@@ -174,6 +249,11 @@ const usePeerConnection = ({
     })
   );
   const peerConnection = refPeerConnection.current;
+  const { current: state } = useRef<{
+    isSendingOffer: boolean;
+  }>({
+    isSendingOffer: false
+  });
 
   useEffect(() => {
     const handleTrack = async (event: RTCTrackEvent) => {
@@ -204,17 +284,15 @@ const usePeerConnection = ({
         `peerConnection::onIceConnectionStateChange ${peerConnection.iceConnectionState}`
       );
     };
-    const handleICECandidate = (event: RTCPeerConnectionIceEvent) => {};
+    const handleICECandidate = (event: RTCPeerConnectionIceEvent) => {
+      console.log("ice candidate", event);
+      if (event.candidate) {
+        transport.sendCandidate(event.candidate);
+      }
+    };
 
-    peerConnection.addEventListener("track", handleTrack);
-    peerConnection.addEventListener(
-      "iceconnectionstatechange",
-      handleConnectionStateChange
-    );
-
-    peerConnection.addEventListener("negotiationneeded", async event => {
+    const handleNegotiationNeeded = async (event: Event) => {
       console.log("peerConnection::negotiationneeded", event);
-
       await peerConnection.setLocalDescription(
         await peerConnection.createOffer()
       );
@@ -222,7 +300,19 @@ const usePeerConnection = ({
         throw new Error("no local description");
       }
       transport.sendOffer(peerConnection.localDescription);
-    });
+    };
+
+    peerConnection.addEventListener("track", handleTrack);
+    peerConnection.addEventListener(
+      "iceconnectionstatechange",
+      handleConnectionStateChange
+    );
+
+    peerConnection.addEventListener(
+      "negotiationneeded",
+      handleNegotiationNeeded
+    );
+    peerConnection.addEventListener("icecandidate", handleICECandidate);
 
     return () => {
       peerConnection.removeEventListener("track", handleTrack);
@@ -231,6 +321,10 @@ const usePeerConnection = ({
         handleConnectionStateChange
       );
       peerConnection.removeEventListener("icecandidate", handleICECandidate);
+      peerConnection.removeEventListener(
+        "negotiationneeded",
+        handleNegotiationNeeded
+      );
     };
   }, []);
 
@@ -249,21 +343,13 @@ const Conference = () => {
   );
   const refAudioEl = useRef<HTMLMediaElement | null>(null);
   // const refAudioElBach = useRef<HTMLMediaElement | null>(null);
-  const refWebSocket = useRef<WebSocket>();
+  const refWebSocket = useRef<WebSocketTransport>();
 
-  const transport = {
-    sendOffer: async (sessionDescription: RTCSessionDescription) => {
-      if (!refWebSocket.current) {
-        throw new Error("transport is not ready");
-      }
-      refWebSocket.current.send(
-        JSON.stringify({
-          type: "offer",
-          offer: sessionDescription
-        })
-      );
-    }
-  };
+  const { current: transport } = useRef<WebSocketTransport>(
+    new WebSocketTransport(
+      `wss://cap.chat/${window.location.pathname.replace("/", "")}`
+    )
+  );
 
   const peerConnection = usePeerConnection({ transport });
 
@@ -275,7 +361,6 @@ const Conference = () => {
     try {
       // Create a noop DataChannel. By default PeerConnections do not connect
       // if they have no media tracks or DataChannels
-      peerConnection.createDataChannel("noop");
       const mediaStream = refMediaStreamManager.current.getStream();
       const audioTracks = mediaStream.getAudioTracks();
       for (const track of audioTracks) {
@@ -289,59 +374,32 @@ const Conference = () => {
   };
 
   useEffect(() => {
-    const ws = new WebSocket(
-      `wss://cap.chat/${window.location.pathname.replace("/", "")}`
-    );
-    refWebSocket.current = ws;
-    const handleOpen = () => {
+    transport.onOpen(() => {
       console.log("web socket connection is open");
       subscribe();
-    };
-    const handleClose = () => {
-      console.log("web socket connection is closed");
-    };
-    const handleMessage = async (event: MessageEvent) => {
-      try {
-        interface VoiceChatEvent {
-          type: "offer" | "answer";
+    });
+    transport.onOffer(async offer => {
+      await peerConnection.setRemoteDescription(offer);
+      const answer = await peerConnection.createAnswer();
+      await peerConnection.setLocalDescription(answer);
+      transport.sendAnswer(answer);
+    });
+    transport.onAnswer(async answer => {
+      await peerConnection.setRemoteDescription(answer);
+    });
+    transport.onCandidate(async candidate => {
+      await peerConnection.addIceCandidate(candidate);
+    });
 
-          offer?: RTCSessionDescription;
-          answer?: RTCSessionDescription;
-        }
-        const data = JSON.parse(event.data) as VoiceChatEvent;
-        if (data.type === "answer" && data.answer) {
-          await peerConnection.setRemoteDescription(
-            new RTCSessionDescription(data.answer)
-          );
-        } else if (data.type === "offer" && data.offer) {
-          await peerConnection.setRemoteDescription(
-            new RTCSessionDescription(data.offer)
-          );
-          const answer = await peerConnection.createAnswer();
-          await peerConnection.setLocalDescription(answer);
-          refWebSocket.current?.send(
-            JSON.stringify({
-              type: "answer",
-              answer: answer
-            })
-          );
-        }
-      } catch (error) {
-        console.error(error);
-      }
-    };
-    const handleError = (event: Event) => {
-      console.log("ws error", event);
-    };
-    ws.addEventListener("open", handleOpen);
-    ws.addEventListener("close", handleClose);
-    ws.addEventListener("message", handleMessage);
-    ws.addEventListener("error", handleError);
+    // ws.addEventListener("open", handleOpen);
+    // ws.addEventListener("close", handleClose);
+    // ws.addEventListener("message", handleMessage);
+    // ws.addEventListener("error", handleError);
     return () => {
-      ws.removeEventListener("open", handleOpen);
-      ws.removeEventListener("close", handleClose);
-      ws.removeEventListener("message", handleMessage);
-      ws.removeEventListener("error", handleError);
+      // ws.removeEventListener("open", handleOpen);
+      // ws.removeEventListener("close", handleClose);
+      // ws.removeEventListener("message", handleMessage);
+      // ws.removeEventListener("error", handleError);
     };
   }, []);
 
