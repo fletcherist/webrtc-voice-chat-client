@@ -181,10 +181,6 @@ const usePeerConnection = ({
       console.log(`peerConnection::ontrack ${event.track.kind}`);
       console.log(event.track.kind, event.streams);
       const stream = event.streams[0];
-
-      const audioEl = document.createElement("audio");
-
-      console.log("attached speaker volume");
       try {
         // if (refAudioEl.current) {
         //   refAudioEl.current.srcObject = stream;
@@ -192,6 +188,8 @@ const usePeerConnection = ({
         //   refAudioEl.current.controls = true;
         //   await refAudioEl.current.play();
         // }
+        const audioEl = document.createElement("audio");
+        console.log("attached speaker volume");
         audioEl.srcObject = stream;
         audioEl.autoplay = true;
         audioEl.controls = true;
@@ -217,16 +215,13 @@ const usePeerConnection = ({
     peerConnection.addEventListener("negotiationneeded", async event => {
       console.log("peerConnection::negotiationneeded", event);
 
-      console.log(0);
       await peerConnection.setLocalDescription(
         await peerConnection.createOffer()
       );
-      console.log(1);
       if (!peerConnection.localDescription) {
         throw new Error("no local description");
       }
       transport.sendOffer(peerConnection.localDescription);
-      console.log(2);
     });
 
     return () => {
@@ -253,7 +248,7 @@ const Conference = () => {
     new MediaStreamManager()
   );
   const refAudioEl = useRef<HTMLMediaElement | null>(null);
-  const refAudioElBach = useRef<HTMLMediaElement | null>(null);
+  // const refAudioElBach = useRef<HTMLMediaElement | null>(null);
   const refWebSocket = useRef<WebSocket>();
 
   const transport = {
@@ -278,11 +273,13 @@ const Conference = () => {
 
   const subscribe = async () => {
     try {
+      // Create a noop DataChannel. By default PeerConnections do not connect
+      // if they have no media tracks or DataChannels
+      peerConnection.createDataChannel("noop");
       const mediaStream = refMediaStreamManager.current.getStream();
-
       const audioTracks = mediaStream.getAudioTracks();
       for (const track of audioTracks) {
-        peerConnection.addTrack(track);
+        peerConnection.addTrack(track, mediaStream);
       }
       log("peerConnection::createOffer");
       log("peerConnection::createOffer_created");
@@ -422,7 +419,7 @@ const Conference = () => {
       <div>microphone volume:{String(microphoneVolume)}</div>
       <div>speaker volume: {speakerVolume}</div>
 
-      <div>
+      {/* <div>
         <button
           onClick={() => {
             console.log("streaming bach");
@@ -440,8 +437,8 @@ const Conference = () => {
         >
           stream j.s bach
         </button>
-      </div>
-      <div>
+      </div> */}
+      {/* <div>
         <button
           onClick={async () => {
             console.log("adding track");
@@ -456,12 +453,12 @@ const Conference = () => {
         >
           add track dynamically
         </button>
-      </div>
-      <audio
+      </div> */}
+      {/* <audio
         ref={refAudioElBach}
         controls
         src="https://www.thesoundarchive.com/starwars/star-wars-cantina-song.mp3"
-      />
+      /> */}
 
       <h1>tracks</h1>
       <div id="tracks"></div>
