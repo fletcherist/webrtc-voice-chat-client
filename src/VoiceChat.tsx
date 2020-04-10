@@ -24,7 +24,7 @@ const getMediaStreamVolume = (
   mediaStreamSource.connect(analyser);
   analyser.connect(processor);
   processor.connect(audioContext.destination);
-  processor.onaudioprocess = function(event) {
+  processor.onaudioprocess = function (event) {
     const buf = event.inputBuffer.getChannelData(0);
     let sum = 0;
     for (let i = 0; i < buf.length; i++) {
@@ -72,7 +72,7 @@ class MediaStreamManager {
       400,
       450,
       500,
-      550
+      550,
     ]);
 
     this.oscillator.start(0);
@@ -90,7 +90,7 @@ class MediaStreamManager {
   public async requestMicrophone(): Promise<void> {
     try {
       const mediaStream = await navigator.mediaDevices.getUserMedia({
-        audio: true
+        audio: true,
       });
 
       this.microphone = this.audioContext.createMediaStreamSource(mediaStream);
@@ -173,24 +173,24 @@ class WebSocketTransport implements Transport {
     this.onCandidateCallback = () => undefined;
     this.onOpenCallback = () => undefined;
     this.ws = new WebSocket(path);
-    this.ws.addEventListener("message", event => this.onMessage(event));
+    this.ws.addEventListener("message", (event) => this.onMessage(event));
     this.ws.addEventListener("open", () => this.onOpenCallback());
     this.ws.addEventListener("close", () => console.log("ws is closed"));
-    this.ws.addEventListener("error", error => console.error(error));
+    this.ws.addEventListener("error", (error) => console.error(error));
   }
   public sendOffer(sessionDescription: RTCSessionDescriptionInit): void {
     this.ws.send(
       JSON.stringify({
-        type: "answer",
-        answer: sessionDescription
+        type: "offer",
+        offer: sessionDescription,
       })
     );
   }
   public sendAnswer(sessionDescription: RTCSessionDescriptionInit): void {
     this.ws.send(
       JSON.stringify({
-        type: "offer",
-        answer: sessionDescription
+        type: "answer",
+        answer: sessionDescription,
       })
     );
   }
@@ -198,7 +198,7 @@ class WebSocketTransport implements Transport {
     this.ws.send(
       JSON.stringify({
         type: "candidate",
-        answer: candidate
+        candidate: candidate,
       })
     );
   }
@@ -235,7 +235,7 @@ class WebSocketTransport implements Transport {
 }
 
 const usePeerConnection = ({
-  transport
+  transport,
 }: {
   transport: Transport;
 }): RTCPeerConnection => {
@@ -243,16 +243,16 @@ const usePeerConnection = ({
     new RTCPeerConnection({
       iceServers: [
         {
-          urls: "stun:stun.l.google.com:19302"
-        }
-      ]
+          urls: "stun:stun.l.google.com:19302",
+        },
+      ],
     })
   );
   const peerConnection = refPeerConnection.current;
   const { current: state } = useRef<{
     isSendingOffer: boolean;
   }>({
-    isSendingOffer: false
+    isSendingOffer: false,
   });
 
   useEffect(() => {
@@ -378,16 +378,17 @@ const Conference = () => {
       console.log("web socket connection is open");
       subscribe();
     });
-    transport.onOffer(async offer => {
+    transport.onOffer(async (offer) => {
       await peerConnection.setRemoteDescription(offer);
       const answer = await peerConnection.createAnswer();
       await peerConnection.setLocalDescription(answer);
       transport.sendAnswer(answer);
     });
-    transport.onAnswer(async answer => {
+    transport.onAnswer(async (answer) => {
       await peerConnection.setRemoteDescription(answer);
     });
-    transport.onCandidate(async candidate => {
+    transport.onCandidate(async (candidate) => {
+      console.log("[local]: adding ice candidate");
       await peerConnection.addIceCandidate(candidate);
     });
 
@@ -553,7 +554,7 @@ export const VoiceChat = () => {
             height: "100vh",
             display: "flex",
             alignItems: "center",
-            justifyContent: "center"
+            justifyContent: "center",
           }}
         >
           <button
@@ -561,7 +562,7 @@ export const VoiceChat = () => {
               setShowConference(true);
             }}
             style={{
-              fontSize: 48
+              fontSize: 48,
             }}
           >
             tap to join voice chat
