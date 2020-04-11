@@ -137,7 +137,7 @@ class MediaStreamManager {
 interface Transport {
   sendOffer: (sessionDescription: RTCSessionDescriptionInit) => void;
   sendAnswer: (sessionDescription: RTCSessionDescriptionInit) => void;
-  sendCandidate: (candidate: RTCIceCandidate) => void;
+  sendCandidate: (candidate: RTCIceCandidateInit) => void;
 
   onOpen: (callback: () => void) => void;
   onOffer: (
@@ -150,7 +150,7 @@ interface Transport {
 }
 
 interface TransportEvent {
-  type: "offer" | "answer" | "candidate" | "error";
+  type: "offer" | "answer" | "candidate" | "error" | "request_offer";
 
   offer?: RTCSessionDescriptionInit;
   answer?: RTCSessionDescriptionInit;
@@ -179,28 +179,20 @@ class WebSocketTransport implements Transport {
     this.ws.addEventListener("error", (error) => console.error(error));
   }
   public sendOffer(sessionDescription: RTCSessionDescriptionInit): void {
-    this.ws.send(
-      JSON.stringify({
-        type: "offer",
-        offer: sessionDescription,
-      })
-    );
+    this.sendJSON({ type: "offer", offer: sessionDescription });
   }
   public sendAnswer(sessionDescription: RTCSessionDescriptionInit): void {
-    this.ws.send(
-      JSON.stringify({
-        type: "answer",
-        answer: sessionDescription,
-      })
-    );
+    this.sendJSON({ type: "answer", answer: sessionDescription });
   }
-  public sendCandidate(candidate: RTCIceCandidate) {
-    this.ws.send(
-      JSON.stringify({
-        type: "candidate",
-        candidate: candidate,
-      })
-    );
+  public sendCandidate(candidate: RTCIceCandidateInit) {
+    this.sendJSON({ type: "candidate", candidate });
+  }
+  public requestOffer() {
+    this.sendJSON({ type: "request_offer" });
+  }
+
+  private sendJSON(event: TransportEvent) {
+    this.ws.send(JSON.stringify(event));
   }
 
   private onMessage(event: MessageEvent) {
@@ -285,21 +277,20 @@ const usePeerConnection = ({
       );
     };
     const handleICECandidate = (event: RTCPeerConnectionIceEvent) => {
-      console.log("ice candidate", event);
       if (event.candidate) {
-        transport.sendCandidate(event.candidate);
+        transport.sendCandidate(event.candidate.toJSON());
       }
     };
 
     const handleNegotiationNeeded = async (event: Event) => {
-      console.log("peerConnection::negotiationneeded", event);
-      await peerConnection.setLocalDescription(
-        await peerConnection.createOffer()
-      );
-      if (!peerConnection.localDescription) {
-        throw new Error("no local description");
-      }
-      transport.sendOffer(peerConnection.localDescription);
+      // console.log("peerConnection::negotiationneeded", event);
+      // await peerConnection.setLocalDescription(
+      //   await peerConnection.createOffer()
+      // );
+      // if (!peerConnection.localDescription) {
+      //   throw new Error("no local description");
+      // }
+      // transport.sendOffer(peerConnection.localDescription);
     };
 
     peerConnection.addEventListener("track", handleTrack);
@@ -366,8 +357,6 @@ const Conference = () => {
       for (const track of audioTracks) {
         peerConnection.addTrack(track, mediaStream);
       }
-      log("peerConnection::createOffer");
-      log("peerConnection::createOffer_created");
     } catch (error) {
       log(error);
     }
@@ -377,6 +366,7 @@ const Conference = () => {
     transport.onOpen(() => {
       console.log("web socket connection is open");
       subscribe();
+      transport.requestOffer();
     });
     transport.onOffer(async (offer) => {
       await peerConnection.setRemoteDescription(offer);
