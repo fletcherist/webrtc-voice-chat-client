@@ -150,11 +150,24 @@ interface Transport {
 }
 
 interface TransportEvent {
-  type: "offer" | "answer" | "candidate" | "error" | "request_offer";
+  type:
+    | "offer"
+    | "answer"
+    | "candidate"
+    | "error"
+    | "request_offer"
+    | "user"
+    | "user_join"
+    | "user_leave";
 
   offer?: RTCSessionDescriptionInit;
   answer?: RTCSessionDescriptionInit;
   candidate?: RTCIceCandidateInit;
+  user?: User;
+}
+interface User {
+  id: string;
+  emoji: string;
 }
 
 class WebSocketTransport implements Transport {
@@ -167,11 +180,13 @@ class WebSocketTransport implements Transport {
   ) => void;
   private onCandidateCallback: (candidate: RTCIceCandidateInit) => void;
   private onOpenCallback: () => void;
+  private onEventCallback: (event: TransportEvent) => void;
   constructor(path: string) {
     this.onOfferCallback = () => undefined;
     this.onAnswerCallback = () => undefined;
     this.onCandidateCallback = () => undefined;
     this.onOpenCallback = () => undefined;
+    this.onEventCallback = () => undefined;
     this.ws = new WebSocket(path);
     this.ws.addEventListener("message", (event) => this.onMessage(event));
     this.ws.addEventListener("open", () => this.onOpenCallback());
@@ -197,6 +212,7 @@ class WebSocketTransport implements Transport {
 
   private onMessage(event: MessageEvent) {
     const data = JSON.parse(event.data) as TransportEvent;
+
     if (data.type === "answer" && data.answer) {
       return this.onAnswerCallback(data.answer);
     } else if (data.type === "offer" && data.offer) {
@@ -206,7 +222,7 @@ class WebSocketTransport implements Transport {
     } else if (data.type === "error") {
       console.error(data);
     } else {
-      throw new Error(`type ${data.type} not implemented`);
+      this.onEventCallback(data);
     }
   }
 
@@ -223,6 +239,9 @@ class WebSocketTransport implements Transport {
     callback: WebSocketTransport["onCandidateCallback"]
   ): void {
     this.onCandidateCallback = callback;
+  }
+  public onEvent(callback: WebSocketTransport["onEventCallback"]): void {
+    this.onEventCallback = callback;
   }
 }
 
@@ -336,6 +355,8 @@ const Conference = () => {
   // const refAudioElBach = useRef<HTMLMediaElement | null>(null);
   const refWebSocket = useRef<WebSocketTransport>();
 
+  const [user, setUser] = useState<User>();
+
   const { current: transport } = useRef<WebSocketTransport>(
     new WebSocketTransport(
       `wss://cap.chat/${window.location.pathname.replace("/", "")}`
@@ -380,6 +401,16 @@ const Conference = () => {
     transport.onCandidate(async (candidate) => {
       console.log("[local]: adding ice candidate");
       await peerConnection.addIceCandidate(candidate);
+    });
+    transport.onEvent(async (event) => {
+      console.log("EVENT", event);
+      if (event.type === "user_join") {
+        console.log(event, "someone joined");
+      } else if (event.type === "user") {
+        setUser(event.user);
+      } else {
+        throw new Error(`type ${event.type} not implemented`);
+      }
     });
 
     // ws.addEventListener("open", handleOpen);
@@ -426,8 +457,20 @@ const Conference = () => {
       window.removeEventListener("keyup", handleMuteMicrophone);
     };
   }, []);
+
+  const renderUser = () => {
+    if (!user) {
+      return null;
+    }
+    return (
+      <div style={{ display: "flex", justifyContent: "center" }}>
+        <div style={{ fontSize: 96 }}>{user.emoji}</div>
+      </div>
+    );
+  };
   return (
     <div>
+      {renderUser()}
       <audio ref={refAudioEl} controls />
       <div>
         <button
