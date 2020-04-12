@@ -642,12 +642,26 @@ const Conference = () => {
 export const VoiceChat = () => {
   const [showConference, setShowConference] = useState<boolean>(false);
 
+  const refContainer = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    const set100vh = () => {
+      if (refContainer.current) {
+        refContainer.current.style.height = `${window.innerHeight}px`;
+      }
+    };
+    window.addEventListener("resize", set100vh);
+    set100vh();
+    return () => {
+      window.removeEventListener("resize", set100vh);
+    };
+  }, []);
+
   const renderContent = () => {
     if (!showConference) {
       return (
         <div
           style={{
-            height: "100vh",
+            height: "100%",
             display: "flex",
             alignItems: "center",
             justifyContent: "center",
@@ -669,7 +683,7 @@ export const VoiceChat = () => {
 
   return (
     <StoreProvider>
-      <div className={css.container}>
+      <div className={css.container} ref={refContainer}>
         {/* <Sandbox /> */}
         {renderContent()}
       </div>

@@ -3,10 +3,10 @@
   justify-content: center;
   box-sizing: border-box;
   font-family: "Helvetica Neue", Helvetica, sans-serif;
-  height: 100%;
 }
 
 .wrapper {
+  height: 100%;
   width: 100%;
   display: flex;
   flex-direction: column;
