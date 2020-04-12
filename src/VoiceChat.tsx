@@ -158,16 +158,22 @@ interface TransportEvent {
     | "request_offer"
     | "user"
     | "user_join"
-    | "user_leave";
+    | "user_leave"
+    | "room";
 
   offer?: RTCSessionDescriptionInit;
   answer?: RTCSessionDescriptionInit;
   candidate?: RTCIceCandidateInit;
   user?: User;
+  room?: Room;
 }
 interface User {
   id: string;
   emoji: string;
+}
+
+interface Room {
+  users: User[];
 }
 
 class WebSocketTransport implements Transport {
@@ -344,6 +350,8 @@ const usePeerConnection = ({
 interface State {
   isMutedMicrophone: boolean;
   isMutedSpeaker: boolean;
+  user?: User;
+  room?: Room;
 }
 interface Store {
   state: State;
@@ -372,6 +380,10 @@ const StoreProvider: React.FC = ({ children }) => {
     </StoreContext.Provider>
   );
 };
+const useStore = (): Store => {
+  const context = React.useContext(StoreContext);
+  return context;
+};
 
 const DEFAULT_MIC_ENABLED = false;
 
@@ -385,6 +397,7 @@ const Conference = () => {
   );
   const refAudioEl = useRef<HTMLMediaElement | null>(null);
   // const refAudioElBach = useRef<HTMLMediaElement | null>(null);
+  const store = useStore();
 
   const [user, setUser] = useState<User>();
   const refTransport = useRef<WebSocketTransport>();
@@ -435,25 +448,17 @@ const Conference = () => {
     });
     transport.onEvent(async (event) => {
       console.log("EVENT", event);
+
       if (event.type === "user_join") {
         console.log(event, "someone joined");
       } else if (event.type === "user") {
         setUser(event.user);
+      } else if (event.type === "room") {
+        store.update({ room: event.room });
       } else {
         throw new Error(`type ${event.type} not implemented`);
       }
     });
-
-    // ws.addEventListener("open", handleOpen);
-    // ws.addEventListener("close", handleClose);
-    // ws.addEventListener("message", handleMessage);
-    // ws.addEventListener("error", handleError);
-    return () => {
-      // ws.removeEventListener("open", handleOpen);
-      // ws.removeEventListener("close", handleClose);
-      // ws.removeEventListener("message", handleMessage);
-      // ws.removeEventListener("error", handleError);
-    };
   }, []);
 
   useEffect(() => {
@@ -636,23 +641,38 @@ export const VoiceChat = () => {
     return <Conference />;
   };
   return (
-    <div className={css.container}>
-      <Sandbox />
-      {renderContent()}
-    </div>
+    <StoreProvider>
+      <div className={css.container}>
+        <Sandbox />
+        {renderContent()}
+      </div>
+    </StoreProvider>
   );
 };
 
 const Sandbox = () => {
   return (
     <div>
-      <ButtonMicrohoneContainer />
-      <ButtonSpeakerContainer />
+      <Buttons />
     </div>
   );
 };
 
-const Buttons = () => {};
+const Buttons: React.FC = () => {
+  const { state, update } = useStore();
+  return (
+    <div className={css.buttons}>
+      <ButtonMicrohone
+        muted={state.isMutedMicrophone}
+        onClick={() => update({ isMutedMicrophone: !state.isMutedMicrophone })}
+      />
+      <ButtonSpeaker
+        muted={state.isMutedSpeaker}
+        onClick={() => update({ isMutedSpeaker: !state.isMutedSpeaker })}
+      />
+    </div>
+  );
+};
 const ButtonMicrohoneContainer = () => {
   const [isMuted, setIsMuted] = useState<boolean>(false);
   return (
@@ -692,7 +712,7 @@ const IconMicrophone: React.FC<{
 }> = ({ muted }) => {
   if (muted) {
     return (
-      <svg aria-hidden="false" width="20" height="20" viewBox="0 0 24 24">
+      <svg aria-hidden="false" width="30" height="30" viewBox="0 0 24 24">
         <path
           d="M6.7 11H5C5 12.19 5.34 13.3 5.9 14.28L7.13 13.05C6.86 12.43 6.7 11.74 6.7 11Z"
           fill="white"
@@ -714,7 +734,7 @@ const IconMicrophone: React.FC<{
   }
 
   return (
-    <svg aria-hidden="false" width="20" height="20" viewBox="0 0 24 24">
+    <svg aria-hidden="false" width="30px" height="30px" viewBox="0 0 24 24">
       <path
         fill-rule="evenodd"
         clip-rule="evenodd"
@@ -736,7 +756,7 @@ const IconSpeaker: React.FC<{
 }> = ({ muted }) => {
   if (muted) {
     return (
-      <svg aria-hidden="false" width="20" height="20" viewBox="0 0 24 24">
+      <svg aria-hidden="false" width="30" height="30" viewBox="0 0 24 24">
         <path
           d="M6.16204 15.0065C6.10859 15.0022 6.05455 15 6 15H4V12C4 7.588 7.589 4 12 4C13.4809 4 14.8691 4.40439 16.0599 5.10859L17.5102 3.65835C15.9292 2.61064 14.0346 2 12 2C6.486 2 2 6.485 2 12V19.1685L6.16204 15.0065Z"
           fill="white"
@@ -756,7 +776,7 @@ const IconSpeaker: React.FC<{
   }
 
   return (
-    <svg aria-hidden="false" width="20" height="20" viewBox="0 0 24 24">
+    <svg aria-hidden="false" width="30" height="30" viewBox="0 0 24 24">
       <svg width="24" height="24" viewBox="0 0 24 24">
         <path
           d="M12 2.00305C6.486 2.00305 2 6.48805 2 12.0031V20.0031C2 21.1071 2.895 22.0031 4 22.0031H6C7.104 22.0031 8 21.1071 8 20.0031V17.0031C8 15.8991 7.104 15.0031 6 15.0031H4V12.0031C4 7.59105 7.589 4.00305 12 4.00305C16.411 4.00305 20 7.59105 20 12.0031V15.0031H18C16.896 15.0031 16 15.8991 16 17.0031V20.0031C16 21.1071 16.896 22.0031 18 22.0031H20C21.104 22.0031 22 21.1071 22 20.0031V12.0031C22 6.48805 17.514 2.00305 12 2.00305Z"
