@@ -353,16 +353,15 @@ const Conference = () => {
   );
   const refAudioEl = useRef<HTMLMediaElement | null>(null);
   // const refAudioElBach = useRef<HTMLMediaElement | null>(null);
-  const refWebSocket = useRef<WebSocketTransport>();
 
   const [user, setUser] = useState<User>();
-
-  const { current: transport } = useRef<WebSocketTransport>(
-    new WebSocketTransport(
+  const refTransport = useRef<WebSocketTransport>();
+  if (!refTransport.current) {
+    refTransport.current = new WebSocketTransport(
       `wss://cap.chat/${window.location.pathname.replace("/", "")}`
-    )
-  );
-
+    );
+  }
+  const transport = refTransport.current;
   const peerConnection = usePeerConnection({ transport });
 
   const log = (msg: any) => {
