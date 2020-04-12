@@ -363,9 +363,15 @@ interface State {
   user?: User;
   room: Room;
 }
+
+interface Api {
+  roomUserAdd: (user: User) => void;
+  roomUserRemove: (user: User) => void;
+}
 interface Store {
   state: State;
   update: (partial: Partial<State>) => void;
+  api: Api;
 }
 const defaultState: State = {
   isMutedMicrophone: true,
@@ -375,19 +381,36 @@ const defaultState: State = {
   },
 };
 
-const StoreContext = React.createContext<Store>({
-  state: defaultState,
-  update: () => undefined,
-});
+const StoreContext = React.createContext<Store | undefined>(undefined);
 const StoreProvider: React.FC = ({ children }) => {
   const [state, setState] = useState<State>(defaultState);
   const update = (partial: Partial<State>) =>
     setState({ ...state, ...partial });
+
+  const api: Api = {
+    roomUserAdd: (user) => {
+      update({
+        room: {
+          ...state.room,
+          users: [...state.room.users, user],
+        },
+      });
+    },
+    roomUserRemove: (user) => {
+      update({
+        room: {
+          ...state.room,
+          users: state.room.users.filter((roomUser) => roomUser.id !== user.id),
+        },
+      });
+    },
+  };
   return (
     <StoreContext.Provider
       value={{
         state,
         update,
+        api,
       }}
     >
       {children}
@@ -396,7 +419,7 @@ const StoreProvider: React.FC = ({ children }) => {
 };
 const useStore = (): Store => {
   const context = React.useContext(StoreContext);
-  return context;
+  return context as Store; // store is defined anyway
 };
 
 const DEFAULT_MIC_ENABLED = false;
@@ -442,6 +465,7 @@ const Conference = () => {
   };
 
   useEffect(() => {
+    console.log("store", store);
     transport.onOpen(() => {
       console.log("web socket connection is open");
       subscribe();
@@ -464,7 +488,15 @@ const Conference = () => {
       console.log("EVENT", event);
 
       if (event.type === "user_join") {
-        console.log(event, "someone joined");
+        if (!event.user) {
+          throw new Error("no user");
+        }
+        store.api.roomUserAdd(event.user);
+      } else if (event.type === "user_leave") {
+        if (!event.user) {
+          throw new Error("no user");
+        }
+        store.api.roomUserRemove(event.user);
       } else if (event.type === "user") {
         setUser(event.user);
       } else if (event.type === "room") {
@@ -473,7 +505,7 @@ const Conference = () => {
         throw new Error(`type ${event.type} not implemented`);
       }
     });
-  }, []);
+  }, [store]);
 
   // useEffect(() => {
   //   const handleUnmuteMicrophone = (event: KeyboardEvent) => {
@@ -527,7 +559,7 @@ const Conference = () => {
               fontSize: 60,
             }}
           >
-            ☠️
+            👀
           </div>
           <div style={{ textAlign: "center", fontSize: 16, color: "white" }}>
             ждём остальных...
@@ -543,6 +575,7 @@ const Conference = () => {
             justifyContent: "center",
             pointerEvents: "none",
             userSelect: "none",
+            padding: 20,
           }}
           key={user.id}
         >

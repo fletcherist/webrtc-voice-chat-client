@@ -67,6 +67,9 @@
 .top {
   flex-grow: 2;
   background-color: rgba(0, 0, 0, 0.1);
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 
 .bottom {
