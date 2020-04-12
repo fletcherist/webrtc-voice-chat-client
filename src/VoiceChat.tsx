@@ -361,7 +361,7 @@ interface State {
   isMutedMicrophone: boolean;
   isMutedSpeaker: boolean;
   user?: User;
-  room?: Room;
+  room: Room;
 }
 interface Store {
   state: State;
@@ -370,7 +370,11 @@ interface Store {
 const defaultState: State = {
   isMutedMicrophone: true,
   isMutedSpeaker: false,
+  room: {
+    users: [],
+  },
 };
+
 const StoreContext = React.createContext<Store>({
   state: defaultState,
   update: () => undefined,
@@ -505,8 +509,31 @@ const Conference = () => {
   // }, []);
 
   const renderUsers = () => {
-    if (!store.state.room) {
-      return <div>room is empty</div>;
+    if (state.room.users.length === 0) {
+      return (
+        <div
+          style={{
+            display: "flex",
+            flexDirection: "column",
+            height: "100%",
+            justifyContent: "center",
+          }}
+        >
+          <div
+            style={{
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              fontSize: 60,
+            }}
+          >
+            ☠️
+          </div>
+          <div style={{ textAlign: "center", fontSize: 16, color: "white" }}>
+            ждём остальных...
+          </div>
+        </div>
+      );
     }
     return store.state.room.users.map((user) => {
       return (
