@@ -542,60 +542,38 @@ const Conference = () => {
     );
   };
   return (
-    <div>
-      <div id="tracks"></div>
-      {renderUsers()}
-      {renderUser()}
-      <div>
-        <button onClick={() => {}}>
-          {micEnabled ? "mute" : "enable"} microphone
-          <span role="img" aria-label="enable microphone">
-            🎤
-          </span>
-        </button>
-      </div>
-      <div>microphone: {micEnabled ? "enabled" : "disabled"}</div>
-      <div>microphone volume:{String(microphoneVolume)}</div>
-      <div>speaker volume: {speakerVolume}</div>
+    <div className={css.wrapper}>
+      {/* <div id="tracks"></div> */}
 
-      <div className={css.buttons}>
-        <ButtonMicrohone
-          muted={state.isMutedMicrophone}
-          onClick={async () => {
-            if (refMediaStreamManager.current) {
-              if (!refMediaStreamManager.current.isMicrophoneRequested) {
-                await refMediaStreamManager.current.requestMicrophone();
+      {/* <div>microphone volume:{String(microphoneVolume)}</div>
+      <div>speaker volume: {speakerVolume}</div> */}
+
+      <div className={css.top}>{renderUsers()}</div>
+      <div className={css.bottom}>
+        {renderUser()}
+        <div className={css.buttons}>
+          <ButtonMicrohone
+            muted={state.isMutedMicrophone}
+            onClick={async () => {
+              if (refMediaStreamManager.current) {
+                if (!refMediaStreamManager.current.isMicrophoneRequested) {
+                  await refMediaStreamManager.current.requestMicrophone();
+                }
+                if (refMediaStreamManager.current.isMicrophoneMuted) {
+                  refMediaStreamManager.current.microphoneUnmute();
+                  update({ isMutedMicrophone: false });
+                } else {
+                  refMediaStreamManager.current.microphoneMute();
+                  update({ isMutedMicrophone: true });
+                }
               }
-              if (refMediaStreamManager.current.isMicrophoneMuted) {
-                refMediaStreamManager.current.microphoneUnmute();
-                update({ isMutedMicrophone: false });
-              } else {
-                refMediaStreamManager.current.microphoneMute();
-                update({ isMutedMicrophone: true });
-              }
-            }
-          }}
-        />
-        <ButtonSpeaker
-          muted={state.isMutedSpeaker}
-          onClick={() => update({ isMutedSpeaker: !state.isMutedSpeaker })}
-        />
-        <div
-          className={css.speakButton}
-          onPointerDown={() => {
-            // setMicEnabled(true);
-            if (refMediaStreamManager.current) {
-              // subscribe();
-              refMediaStreamManager.current.enableOscillator();
-            }
-          }}
-          onPointerUp={() => {
-            // setMicEnabled(false);
-            if (refMediaStreamManager.current) {
-              refMediaStreamManager.current.disableOscillator();
-            }
-          }}
-        />
+            }}
+          />
+          <ButtonSpeaker
+            muted={state.isMutedSpeaker}
+            onClick={() => update({ isMutedSpeaker: !state.isMutedSpeaker })}
+          />
+        </div>
       </div>
     </div>
   );
@@ -619,11 +597,9 @@ export const VoiceChat = () => {
             onClick={() => {
               setShowConference(true);
             }}
-            style={{
-              fontSize: 48,
-            }}
+            className={css.buttonJoin}
           >
-            tap to join voice chat
+            войти 📞
           </button>
         </div>
       );
@@ -804,6 +780,31 @@ const Trash = () => {
         controls
         src="https://www.thesoundarchive.com/starwars/star-wars-cantina-song.mp3"
       /> */}
+      {/* <div>
+        <button onClick={() => {}}>
+          {micEnabled ? "mute" : "enable"} microphone
+          <span role="img" aria-label="enable microphone">
+            🎤
+          </span>
+        </button>
+      </div>
+      <div>microphone: {micEnabled ? "enabled" : "disabled"}</div> */}
+      {/* <div
+          className={css.speakButton}
+          onPointerDown={() => {
+            // setMicEnabled(true);
+            if (refMediaStreamManager.current) {
+              // subscribe();
+              refMediaStreamManager.current.enableOscillator();
+            }
+          }}
+          onPointerUp={() => {
+            // setMicEnabled(false);
+            if (refMediaStreamManager.current) {
+              refMediaStreamManager.current.disableOscillator();
+            }
+          }}
+        /> */}
     </div>
   );
 };

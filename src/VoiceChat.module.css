@@ -7,6 +7,8 @@
 .wrapper {
   height: 100vh;
   width: 100%;
+  display: flex;
+  flex-direction: column;
 }
 
 .speakButton {
@@ -44,5 +46,33 @@
 
 .buttons {
   display: flex;
+  justify-content: center;
+}
+
+.buttonJoin {
+  font-size: 1.6rem;
+  background-color: rgba(0, 0, 0, 0.2);
+  border: 0;
+  border-radius: 32px;
+  padding: 10px 40px;
+  color: white;
+  /* user-select: none; */
+  outline-width: 0;
+  cursor: pointer;
+}
+.buttonJoin:active {
+  background-color: rgba(0, 0, 0, 0.4);
+}
+
+.top {
+  flex-grow: 2;
+  background-color: rgba(0, 0, 0, 0.1);
+}
+
+.bottom {
+  background-color: rgba(0, 0, 0, 0.3);
+  min-height: 250px;
+  display: flex;
+  flex-direction: column;
   justify-content: center;
 }
