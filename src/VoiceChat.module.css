@@ -1,13 +1,12 @@
 .container {
   display: flex;
   justify-content: center;
-  background-color: #292b2f;
   box-sizing: border-box;
+  font-family: "Helvetica Neue", Helvetica, sans-serif;
+  height: 100%;
 }
 
 .wrapper {
-  min-height: -webkit-fill-available;
-  min-height: 100vh;
   width: 100%;
   display: flex;
   flex-direction: column;

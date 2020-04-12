@@ -670,10 +670,8 @@ export const VoiceChat = () => {
   return (
     <StoreProvider>
       <div className={css.container}>
-        <div className={css.wrapper}>
-          {/* <Sandbox /> */}
-          {renderContent()}
-        </div>
+        {/* <Sandbox /> */}
+        {renderContent()}
       </div>
     </StoreProvider>
   );
