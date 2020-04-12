@@ -4,6 +4,11 @@
   background-color: #292b2f;
 }
 
+.wrapper {
+  height: 100vh;
+  width: 100%;
+}
+
 .speakButton {
   width: 100px;
   height: 100px;
@@ -17,8 +22,8 @@
 }
 
 .buttonMicrophone {
-  height: 40px;
-  width: 40px;
+  height: 60px;
+  width: 60px;
   border-radius: 4px;
   background-color: transparent;
   line-height: 0;
@@ -39,4 +44,5 @@
 
 .buttons {
   display: flex;
+  justify-content: center;
 }

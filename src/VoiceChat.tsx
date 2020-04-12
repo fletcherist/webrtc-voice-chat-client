@@ -48,7 +48,11 @@ class MediaStreamManager {
   private oscillator: OscillatorNode;
   private oscillatorGain: GainNode;
 
+  public isMicrophoneRequested: boolean;
+
   constructor() {
+    this.isMicrophoneRequested = false;
+
     const AudioContext =
       window.AudioContext || (window as any).webkitAudioContext;
 
@@ -89,15 +93,18 @@ class MediaStreamManager {
 
   public async requestMicrophone(): Promise<void> {
     try {
+      this.isMicrophoneRequested = true;
       const mediaStream = await navigator.mediaDevices.getUserMedia({
         audio: true,
       });
 
       this.microphone = this.audioContext.createMediaStreamSource(mediaStream);
       this.microphoneGain = this.audioContext.createGain();
+      this.microphoneGain.gain.value = 0; // mute by default
       this.microphone.connect(this.microphoneGain);
       this.microphoneGain.connect(this.gainMaster);
     } catch (error) {
+      this.isMicrophoneRequested = false;
       return undefined;
     }
   }
@@ -109,17 +116,20 @@ class MediaStreamManager {
     this.gainMaster.gain.value = 1;
   }
 
-  get isMuted() {
-    return this.gainMaster.gain.value === 0;
+  get isMicrophoneMuted(): boolean {
+    if (!this.microphoneGain) {
+      throw new Error("Microphone is not connected");
+    }
+    return this.microphoneGain.gain.value === 0;
   }
 
-  microphoneMute() {
+  microphoneMute(): void {
     if (!this.microphoneGain) {
       throw new Error("Microphone is not connected");
     }
     this.microphoneGain.gain.value = 0;
   }
-  microphoneUnmute() {
+  microphoneUnmute(): void {
     if (!this.microphoneGain) {
       throw new Error("Microphone is not connected");
     }
@@ -395,9 +405,9 @@ const Conference = () => {
   const refMediaStreamManager = useRef<MediaStreamManager>(
     new MediaStreamManager()
   );
-  const refAudioEl = useRef<HTMLMediaElement | null>(null);
   // const refAudioElBach = useRef<HTMLMediaElement | null>(null);
   const store = useStore();
+  const { state, update } = store;
 
   const [user, setUser] = useState<User>();
   const refTransport = useRef<WebSocketTransport>();
@@ -461,82 +471,83 @@ const Conference = () => {
     });
   }, []);
 
-  useEffect(() => {
-    const handleUnmuteMicrophone = (event: KeyboardEvent) => {
-      try {
-        if (event.key === "Shift") {
-          if (refMediaStreamManager.current) {
-            refMediaStreamManager.current.microphoneUnmute();
-            setMicEnabled(true);
-          }
-        }
-      } catch (error) {
-        log(error);
-      }
-    };
-    const handleMuteMicrophone = (event: KeyboardEvent) => {
-      try {
-        if (event.key === "Shift") {
-          if (refMediaStreamManager.current) {
-            refMediaStreamManager.current.microphoneUnmute();
-            setMicEnabled(false);
-          }
-        }
-      } catch (error) {
-        log(error);
-      }
-    };
-    window.addEventListener("keydown", handleUnmuteMicrophone);
-    window.addEventListener("keyup", handleMuteMicrophone);
-    return () => {
-      window.removeEventListener("keydown", handleUnmuteMicrophone);
-      window.removeEventListener("keyup", handleMuteMicrophone);
-    };
-  }, []);
+  // useEffect(() => {
+  //   const handleUnmuteMicrophone = (event: KeyboardEvent) => {
+  //     try {
+  //       if (event.key === "Shift") {
+  //         if (refMediaStreamManager.current) {
+  //           refMediaStreamManager.current.microphoneUnmute();
+  //           setMicEnabled(true);
+  //         }
+  //       }
+  //     } catch (error) {
+  //       log(error);
+  //     }
+  //   };
+  //   const handleMuteMicrophone = (event: KeyboardEvent) => {
+  //     try {
+  //       if (event.key === "Shift") {
+  //         if (refMediaStreamManager.current) {
+  //           refMediaStreamManager.current.microphoneUnmute();
+  //           setMicEnabled(false);
+  //         }
+  //       }
+  //     } catch (error) {
+  //       log(error);
+  //     }
+  //   };
+  //   window.addEventListener("keydown", handleUnmuteMicrophone);
+  //   window.addEventListener("keyup", handleMuteMicrophone);
+  //   return () => {
+  //     window.removeEventListener("keydown", handleUnmuteMicrophone);
+  //     window.removeEventListener("keyup", handleMuteMicrophone);
+  //   };
+  // }, []);
 
+  const renderUsers = () => {
+    if (!store.state.room) {
+      return <div>room is empty</div>;
+    }
+    return store.state.room.users.map((user) => {
+      return (
+        <div
+          style={{
+            display: "flex",
+            justifyContent: "center",
+            pointerEvents: "none",
+            userSelect: "none",
+          }}
+          key={user.id}
+        >
+          <div style={{ fontSize: 48 }}>{user.emoji}</div>
+        </div>
+      );
+    });
+  };
   const renderUser = () => {
     if (!user) {
       return null;
     }
     return (
-      <div style={{ display: "flex", justifyContent: "center" }}>
+      <div
+        style={{
+          display: "flex",
+          justifyContent: "center",
+          pointerEvents: "none",
+          userSelect: "none",
+        }}
+      >
         <div style={{ fontSize: 96 }}>{user.emoji}</div>
       </div>
     );
   };
   return (
     <div>
+      <div id="tracks"></div>
+      {renderUsers()}
       {renderUser()}
-      <audio ref={refAudioEl} controls />
       <div>
-        <button
-          onClick={async () => {
-            if (refMediaStreamManager.current) {
-              await refMediaStreamManager.current.requestMicrophone();
-              setMicEnabled(true);
-            }
-          }}
-        >
-          Request microphone
-          <span role="img" aria-label="enable microphone">
-            🎤
-          </span>
-        </button>
-      </div>
-      <div>
-        <button
-          onClick={() => {
-            if (refMediaStreamManager.current) {
-              if (refMediaStreamManager.current.isMuted) {
-                refMediaStreamManager.current.unmute();
-                setMicEnabled(true);
-              } else {
-                refMediaStreamManager.current.mute();
-                setMicEnabled(false);
-              }
-            }
-          }}
-        >
+        <button onClick={() => {}}>
           {micEnabled ? "mute" : "enable"} microphone
           <span role="img" aria-label="enable microphone">
             🎤
@@ -547,49 +558,28 @@ const Conference = () => {
       <div>microphone volume:{String(microphoneVolume)}</div>
       <div>speaker volume: {speakerVolume}</div>
 
-      {/* <div>
-        <button
-          onClick={() => {
-            console.log("streaming bach");
-            if (refAudioElBach.current && refMediaStreamManager.current) {
-              const mediaElementSource = refMediaStreamManager.current.audioContext.createMediaElementSource(
-                refAudioElBach.current
-              );
-              const gainMedia = refMediaStreamManager.current.audioContext.createGain();
-              mediaElementSource.connect(gainMedia);
-              gainMedia.gain.value = 0.05;
-              gainMedia.connect(refMediaStreamManager.current.gainMaster);
-              refAudioElBach.current.play();
+      <div className={css.buttons}>
+        <ButtonMicrohone
+          muted={state.isMutedMicrophone}
+          onClick={async () => {
+            if (refMediaStreamManager.current) {
+              if (!refMediaStreamManager.current.isMicrophoneRequested) {
+                await refMediaStreamManager.current.requestMicrophone();
+              }
+              if (refMediaStreamManager.current.isMicrophoneMuted) {
+                refMediaStreamManager.current.microphoneUnmute();
+                update({ isMutedMicrophone: false });
+              } else {
+                refMediaStreamManager.current.microphoneMute();
+                update({ isMutedMicrophone: true });
+              }
             }
           }}
-        >
-          stream j.s bach
-        </button>
-      </div> */}
-      {/* <div>
-        <button
-          onClick={async () => {
-            console.log("adding track");
-            // if (refMediaStreamManager.current) {
-            // const stream = refMediaStreamManager.current.getStream()
-            const stream = await navigator.mediaDevices.getUserMedia({
-              audio: true
-            });
-            peerConnection.addTrack(stream.getAudioTracks()[0], stream);
-            // }
-          }}
-        >
-          add track dynamically
-        </button>
-      </div> */}
-      {/* <audio
-        ref={refAudioElBach}
-        controls
-        src="https://www.thesoundarchive.com/starwars/star-wars-cantina-song.mp3"
-      /> */}
-      <h1>tracks</h1>
-      <div id="tracks"></div>
-      <div className={css.container}>
+        />
+        <ButtonSpeaker
+          muted={state.isMutedSpeaker}
+          onClick={() => update({ isMutedSpeaker: !state.isMutedSpeaker })}
+        />
         <div
           className={css.speakButton}
           onPointerDown={() => {
@@ -640,39 +630,23 @@ export const VoiceChat = () => {
     }
     return <Conference />;
   };
+
   return (
     <StoreProvider>
       <div className={css.container}>
-        <Sandbox />
-        {renderContent()}
+        <div className={css.wrapper}>
+          {/* <Sandbox /> */}
+          {renderContent()}
+        </div>
       </div>
     </StoreProvider>
   );
 };
 
 const Sandbox = () => {
-  return (
-    <div>
-      <Buttons />
-    </div>
-  );
+  return <div>{/* <Buttons /> */}</div>;
 };
 
-const Buttons: React.FC = () => {
-  const { state, update } = useStore();
-  return (
-    <div className={css.buttons}>
-      <ButtonMicrohone
-        muted={state.isMutedMicrophone}
-        onClick={() => update({ isMutedMicrophone: !state.isMutedMicrophone })}
-      />
-      <ButtonSpeaker
-        muted={state.isMutedSpeaker}
-        onClick={() => update({ isMutedSpeaker: !state.isMutedSpeaker })}
-      />
-    </div>
-  );
-};
 const ButtonMicrohoneContainer = () => {
   const [isMuted, setIsMuted] = useState<boolean>(false);
   return (
@@ -712,7 +686,7 @@ const IconMicrophone: React.FC<{
 }> = ({ muted }) => {
   if (muted) {
     return (
-      <svg aria-hidden="false" width="30" height="30" viewBox="0 0 24 24">
+      <svg aria-hidden="false" width="100%" height="100%" viewBox="0 0 24 24">
         <path
           d="M6.7 11H5C5 12.19 5.34 13.3 5.9 14.28L7.13 13.05C6.86 12.43 6.7 11.74 6.7 11Z"
           fill="white"
@@ -734,16 +708,16 @@ const IconMicrophone: React.FC<{
   }
 
   return (
-    <svg aria-hidden="false" width="30px" height="30px" viewBox="0 0 24 24">
+    <svg aria-hidden="false" width="100%" height="100%" viewBox="0 0 24 24">
       <path
-        fill-rule="evenodd"
-        clip-rule="evenodd"
+        fillRule="evenodd"
+        clipRule="evenodd"
         d="M14.99 11C14.99 12.66 13.66 14 12 14C10.34 14 9 12.66 9 11V5C9 3.34 10.34 2 12 2C13.66 2 15 3.34 15 5L14.99 11ZM12 16.1C14.76 16.1 17.3 14 17.3 11H19C19 14.42 16.28 17.24 13 17.72V21H11V17.72C7.72 17.23 5 14.41 5 11H6.7C6.7 14 9.24 16.1 12 16.1ZM12 4C11.2 4 11 4.66667 11 5V11C11 11.3333 11.2 12 12 12C12.8 12 13 11.3333 13 11V5C13 4.66667 12.8 4 12 4Z"
         fill="white"
       ></path>
       <path
-        fill-rule="evenodd"
-        clip-rule="evenodd"
+        fillRule="evenodd"
+        clipRule="evenodd"
         d="M14.99 11C14.99 12.66 13.66 14 12 14C10.34 14 9 12.66 9 11V5C9 3.34 10.34 2 12 2C13.66 2 15 3.34 15 5L14.99 11ZM12 16.1C14.76 16.1 17.3 14 17.3 11H19C19 14.42 16.28 17.24 13 17.72V22H11V17.72C7.72 17.23 5 14.41 5 11H6.7C6.7 14 9.24 16.1 12 16.1Z"
         fill="white"
       ></path>
@@ -756,7 +730,7 @@ const IconSpeaker: React.FC<{
 }> = ({ muted }) => {
   if (muted) {
     return (
-      <svg aria-hidden="false" width="30" height="30" viewBox="0 0 24 24">
+      <svg aria-hidden="false" width="100%" height="100%" viewBox="0 0 24 24">
         <path
           d="M6.16204 15.0065C6.10859 15.0022 6.05455 15 6 15H4V12C4 7.588 7.589 4 12 4C13.4809 4 14.8691 4.40439 16.0599 5.10859L17.5102 3.65835C15.9292 2.61064 14.0346 2 12 2C6.486 2 2 6.485 2 12V19.1685L6.16204 15.0065Z"
           fill="white"
@@ -776,7 +750,7 @@ const IconSpeaker: React.FC<{
   }
 
   return (
-    <svg aria-hidden="false" width="30" height="30" viewBox="0 0 24 24">
+    <svg aria-hidden="false" width="100%" height="100%" viewBox="0 0 24 24">
       <svg width="24" height="24" viewBox="0 0 24 24">
         <path
           d="M12 2.00305C6.486 2.00305 2 6.48805 2 12.0031V20.0031C2 21.1071 2.895 22.0031 4 22.0031H6C7.104 22.0031 8 21.1071 8 20.0031V17.0031C8 15.8991 7.104 15.0031 6 15.0031H4V12.0031C4 7.59105 7.589 4.00305 12 4.00305C16.411 4.00305 20 7.59105 20 12.0031V15.0031H18C16.896 15.0031 16 15.8991 16 17.0031V20.0031C16 21.1071 16.896 22.0031 18 22.0031H20C21.104 22.0031 22 21.1071 22 20.0031V12.0031C22 6.48805 17.514 2.00305 12 2.00305Z"
@@ -784,5 +758,52 @@ const IconSpeaker: React.FC<{
         ></path>
       </svg>
     </svg>
+  );
+};
+
+const Trash = () => {
+  return (
+    <div>
+      {/* <div>
+        <button
+          onClick={() => {
+            console.log("streaming bach");
+            if (refAudioElBach.current && refMediaStreamManager.current) {
+              const mediaElementSource = refMediaStreamManager.current.audioContext.createMediaElementSource(
+                refAudioElBach.current
+              );
+              const gainMedia = refMediaStreamManager.current.audioContext.createGain();
+              mediaElementSource.connect(gainMedia);
+              gainMedia.gain.value = 0.05;
+              gainMedia.connect(refMediaStreamManager.current.gainMaster);
+              refAudioElBach.current.play();
+            }
+          }}
+        >
+          stream j.s bach
+        </button>
+      </div> */}
+      {/* <div>
+        <button
+          onClick={async () => {
+            console.log("adding track");
+            // if (refMediaStreamManager.current) {
+            // const stream = refMediaStreamManager.current.getStream()
+            const stream = await navigator.mediaDevices.getUserMedia({
+              audio: true
+            });
+            peerConnection.addTrack(stream.getAudioTracks()[0], stream);
+            // }
+          }}
+        >
+          add track dynamically
+        </button>
+      </div> */}
+      {/* <audio
+        ref={refAudioElBach}
+        controls
+        src="https://www.thesoundarchive.com/starwars/star-wars-cantina-song.mp3"
+      /> */}
+    </div>
   );
 };
