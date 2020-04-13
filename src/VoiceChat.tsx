@@ -890,14 +890,32 @@ const Trash = () => {
   );
 };
 
-class ErrorBoundary extends React.Component<{
+interface ErrorBoundaryProps {
   onError: (error: Error) => void;
-}> {
+}
+class ErrorBoundary extends React.Component<
+  ErrorBoundaryProps,
+  {
+    hasError: boolean;
+    error: Error | undefined;
+  }
+> {
+  constructor(props: ErrorBoundaryProps) {
+    super(props);
+    this.state = { hasError: false, error: undefined };
+  }
+  static getDerivedStateFromError(error: Error) {
+    // Update state so the next render will show the fallback UI.
+    return { hasError: true, error };
+  }
   componentDidCatch(error: Error, info: any) {
     console.log(error, info);
     this.props.onError(error);
   }
   render() {
+    if (this.state.hasError) {
+      return <div>err: {this.state.error}</div>;
+    }
     return this.props.children;
   }
 }
