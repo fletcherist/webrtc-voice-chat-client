@@ -641,6 +641,7 @@ const Conference = () => {
 
 export const VoiceChat = () => {
   const [showConference, setShowConference] = useState<boolean>(false);
+  const [error, setError] = useState<Error>();
 
   const refContainer = useRef<HTMLDivElement>(null);
   useEffect(() => {
@@ -682,12 +683,15 @@ export const VoiceChat = () => {
   };
 
   return (
-    <StoreProvider>
-      <div className={css.container} ref={refContainer}>
-        {/* <Sandbox /> */}
-        {renderContent()}
-      </div>
-    </StoreProvider>
+    <ErrorBoundary onError={(error) => setError(error)}>
+      {error && <span style={{ color: "red" }}>error: {error.message}</span>}
+      <StoreProvider>
+        <div className={css.container} ref={refContainer}>
+          {/* <Sandbox /> */}
+          {renderContent()}
+        </div>
+      </StoreProvider>
+    </ErrorBoundary>
   );
 };
 
@@ -880,3 +884,15 @@ const Trash = () => {
     </div>
   );
 };
+
+class ErrorBoundary extends React.Component<{
+  onError: (error: Error) => void;
+}> {
+  componentDidCatch(error: Error, info: any) {
+    console.log(error, info);
+    this.props.onError(error);
+  }
+  render() {
+    return this.props.children;
+  }
+}
