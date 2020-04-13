@@ -631,7 +631,13 @@ const Conference = () => {
           />
           <ButtonSpeaker
             muted={state.isMutedSpeaker}
-            onClick={() => update({ isMutedSpeaker: !state.isMutedSpeaker })}
+            onClick={() => {
+              try {
+                update({ isMutedSpeaker: !state.isMutedSpeaker });
+              } catch (error) {
+                alert(error);
+              }
+            }}
           />
         </div>
       </div>
@@ -641,7 +647,6 @@ const Conference = () => {
 
 export const VoiceChat = () => {
   const [showConference, setShowConference] = useState<boolean>(false);
-  const [error, setError] = useState<Error>();
 
   const refContainer = useRef<HTMLDivElement>(null);
   useEffect(() => {
@@ -679,25 +684,18 @@ export const VoiceChat = () => {
         </div>
       );
     }
-    throw new Error("some error");
     return <Conference />;
   };
 
   return (
-    <ErrorBoundary
-      onError={(error) => {
-        alert(error);
-        setError(error);
-      }}
-    >
-      {error && <span style={{ color: "red" }}>error: {error.message}</span>}
-      <StoreProvider>
-        <div className={css.container} ref={refContainer}>
+    <StoreProvider>
+      <div className={css.container} ref={refContainer}>
+        <ErrorBoundary>
           {/* <Sandbox /> */}
           {renderContent()}
-        </div>
-      </StoreProvider>
-    </ErrorBoundary>
+        </ErrorBoundary>
+      </div>
+    </StoreProvider>
   );
 };
 
@@ -891,31 +889,28 @@ const Trash = () => {
   );
 };
 
-interface ErrorBoundaryProps {
-  onError: (error: Error) => void;
-}
+interface ErrorBoundaryProps {}
 class ErrorBoundary extends React.Component<
   ErrorBoundaryProps,
   {
-    hasError: boolean;
-    error: Error | undefined;
+    errorMessage: string | undefined;
   }
 > {
   constructor(props: ErrorBoundaryProps) {
     super(props);
-    this.state = { hasError: false, error: undefined };
+    this.state = { errorMessage: undefined };
   }
   static getDerivedStateFromError(error: Error) {
     // Update state so the next render will show the fallback UI.
-    return { hasError: true, error };
+    console.log("getDerivedStateFromError", error);
+    return { errorMessage: error.toString() };
   }
   componentDidCatch(error: Error, info: any) {
-    console.log(error, info);
-    this.props.onError(error);
+    console.log("error here", error, info);
   }
   render() {
-    if (this.state.hasError) {
-      return <div>err: {this.state.error}</div>;
+    if (this.state.errorMessage) {
+      return <div>err: {this.state.errorMessage}</div>;
     }
     return this.props.children;
   }
