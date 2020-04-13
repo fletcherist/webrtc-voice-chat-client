@@ -679,6 +679,7 @@ export const VoiceChat = () => {
         </div>
       );
     }
+    throw new Error("some error");
     return <Conference />;
   };
 
