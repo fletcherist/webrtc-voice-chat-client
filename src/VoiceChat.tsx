@@ -45,8 +45,8 @@ class MediaStreamManager {
   private microphone: MediaStreamAudioSourceNode | undefined;
   private microphoneGain: GainNode | undefined;
 
-  private oscillator: OscillatorNode;
-  private oscillatorGain: GainNode;
+  // private oscillator: OscillatorNode;
+  // private oscillatorGain: GainNode;
 
   public isMicrophoneRequested: boolean;
 
@@ -58,28 +58,28 @@ class MediaStreamManager {
 
     this.audioContext = new AudioContext();
 
-    this.oscillator = this.audioContext.createOscillator();
-    this.oscillatorGain = this.audioContext.createGain();
-    this.disableOscillator();
+    // this.oscillator = this.audioContext.createOscillator();
+    // this.oscillatorGain = this.audioContext.createGain();
+    // this.disableOscillator();
 
     this.gainMaster = this.audioContext.createGain();
 
-    this.oscillator.connect(this.oscillatorGain);
-    this.oscillatorGain.connect(this.gainMaster);
+    // this.oscillator.connect(this.oscillatorGain);
+    // this.oscillatorGain.connect(this.gainMaster);
 
-    this.oscillator.detune.value = 100;
-    this.oscillator.frequency.value = sample([
-      200,
-      250,
-      300,
-      350,
-      400,
-      450,
-      500,
-      550,
-    ]);
+    // this.oscillator.detune.value = 100;
+    // this.oscillator.frequency.value = sample([
+    //   200,
+    //   250,
+    //   300,
+    //   350,
+    //   400,
+    //   450,
+    //   500,
+    //   550,
+    // ]);
 
-    this.oscillator.start(0);
+    // this.oscillator.start(0);
 
     this.mediaStreamDestination = this.audioContext.createMediaStreamDestination();
     this.gainMaster.connect(this.mediaStreamDestination);
@@ -137,10 +137,10 @@ class MediaStreamManager {
   }
 
   enableOscillator() {
-    this.oscillatorGain.gain.value = 1;
+    // this.oscillatorGain.gain.value = 1;
   }
   disableOscillator() {
-    this.oscillatorGain.gain.value = 0;
+    // this.oscillatorGain.gain.value = 0;
   }
 }
 
