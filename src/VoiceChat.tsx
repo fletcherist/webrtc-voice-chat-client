@@ -683,7 +683,12 @@ export const VoiceChat = () => {
   };
 
   return (
-    <ErrorBoundary onError={(error) => setError(error)}>
+    <ErrorBoundary
+      onError={(error) => {
+        alert(error);
+        setError(error);
+      }}
+    >
       {error && <span style={{ color: "red" }}>error: {error.message}</span>}
       <StoreProvider>
         <div className={css.container} ref={refContainer}>
