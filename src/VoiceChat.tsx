@@ -148,6 +148,7 @@ interface Transport {
   sendOffer: (sessionDescription: RTCSessionDescriptionInit) => void;
   sendAnswer: (sessionDescription: RTCSessionDescriptionInit) => void;
   sendCandidate: (candidate: RTCIceCandidateInit) => void;
+  sendEvent: (event: TransportEvent) => void;
 
   onOpen: (callback: () => void) => void;
   onOffer: (
@@ -169,7 +170,9 @@ interface TransportEvent {
     | "user"
     | "user_join"
     | "user_leave"
-    | "room";
+    | "room"
+    | "mute"
+    | "unmute";
 
   offer?: RTCSessionDescriptionInit;
   answer?: RTCSessionDescriptionInit;
@@ -180,6 +183,7 @@ interface TransportEvent {
 interface User {
   id: string;
   emoji: string;
+  mute: boolean;
 }
 
 interface Room {
@@ -210,19 +214,18 @@ class WebSocketTransport implements Transport {
     this.ws.addEventListener("error", (error) => console.error(error));
   }
   public sendOffer(sessionDescription: RTCSessionDescriptionInit): void {
-    this.sendJSON({ type: "offer", offer: sessionDescription });
+    this.sendEvent({ type: "offer", offer: sessionDescription });
   }
   public sendAnswer(sessionDescription: RTCSessionDescriptionInit): void {
-    this.sendJSON({ type: "answer", answer: sessionDescription });
+    this.sendEvent({ type: "answer", answer: sessionDescription });
   }
   public sendCandidate(candidate: RTCIceCandidateInit) {
-    this.sendJSON({ type: "candidate", candidate });
+    this.sendEvent({ type: "candidate", candidate });
   }
   public requestOffer() {
-    this.sendJSON({ type: "request_offer" });
+    this.sendEvent({ type: "request_offer" });
   }
-
-  private sendJSON(event: TransportEvent) {
+  public sendEvent(event: TransportEvent) {
     this.ws.send(JSON.stringify(event));
   }
 
@@ -367,6 +370,7 @@ interface State {
 interface Api {
   roomUserAdd: (user: User) => void;
   roomUserRemove: (user: User) => void;
+  roomUserUpdate: (user: User) => void;
 }
 interface Store {
   state: State;
@@ -387,21 +391,26 @@ const StoreProvider: React.FC = ({ children }) => {
   const update = (partial: Partial<State>) =>
     setState({ ...state, ...partial });
 
+  const updateRoom = (partial: Partial<Room>): void => {
+    return update({ room: { ...state.room, ...partial } });
+  };
   const api: Api = {
     roomUserAdd: (user) => {
-      update({
-        room: {
-          ...state.room,
-          users: [...state.room.users, user],
-        },
-      });
+      updateRoom({ users: [...state.room.users, user] });
     },
     roomUserRemove: (user) => {
-      update({
-        room: {
-          ...state.room,
-          users: state.room.users.filter((roomUser) => roomUser.id !== user.id),
-        },
+      return updateRoom({
+        users: state.room.users.filter((roomUser) => roomUser.id !== user.id),
+      });
+    },
+    roomUserUpdate: (user) => {
+      return updateRoom({
+        users: state.room.users.map((roomUser) => {
+          if (user.id === roomUser.id) {
+            return { ...roomUser, ...user };
+          }
+          return roomUser;
+        }),
       });
     },
   };
@@ -422,16 +431,15 @@ const useStore = (): Store => {
   return context as Store; // store is defined anyway
 };
 
-const DEFAULT_MIC_ENABLED = false;
+export const Conference = () => {
+  // const [micEnabled, setMicEnabled] = useState<boolean>(DEFAULT_MIC_ENABLED);
+  // const [microphoneVolume, setMicrophoneVolume] = useState<number>(0);
+  // const [speakerVolume, setSpeakerVolume] = useState<number>(0);
 
-const Conference = () => {
-  const [micEnabled, setMicEnabled] = useState<boolean>(DEFAULT_MIC_ENABLED);
-  const [microphoneVolume, setMicrophoneVolume] = useState<number>(0);
-  const [speakerVolume, setSpeakerVolume] = useState<number>(0);
-
-  const refMediaStreamManager = useRef<MediaStreamManager>(
-    new MediaStreamManager()
-  );
+  const refMediaStreamManager = useRef<MediaStreamManager>();
+  if (!refMediaStreamManager.current) {
+    refMediaStreamManager.current = new MediaStreamManager();
+  }
   // const refAudioElBach = useRef<HTMLMediaElement | null>(null);
   const store = useStore();
   const { state, update } = store;
@@ -452,8 +460,9 @@ const Conference = () => {
 
   const subscribe = async () => {
     try {
-      // Create a noop DataChannel. By default PeerConnections do not connect
-      // if they have no media tracks or DataChannels
+      if (!refMediaStreamManager.current) {
+        throw new Error("no media stream manager");
+      }
       const mediaStream = refMediaStreamManager.current.getStream();
       const audioTracks = mediaStream.getAudioTracks();
       for (const track of audioTracks) {
@@ -501,6 +510,16 @@ const Conference = () => {
         setUser(event.user);
       } else if (event.type === "room") {
         store.update({ room: event.room });
+      } else if (event.type === "mute") {
+        if (!event.user) {
+          throw new Error("no user");
+        }
+        store.api.roomUserUpdate(event.user);
+      } else if (event.type === "unmute") {
+        if (!event.user) {
+          throw new Error("no user");
+        }
+        store.api.roomUserUpdate(event.user);
       } else {
         throw new Error(`type ${event.type} not implemented`);
       }
@@ -580,6 +599,7 @@ const Conference = () => {
           key={user.id}
         >
           <div style={{ fontSize: 48 }}>{user.emoji}</div>
+          {user.mute && "muted"}
         </div>
       );
     });
@@ -601,13 +621,32 @@ const Conference = () => {
       </div>
     );
   };
+
+  const [showConference, setShowConference] = useState<boolean>(false);
+
+  if (!showConference) {
+    return (
+      <div
+        style={{
+          height: "100%",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+        }}
+      >
+        <button
+          onClick={() => {
+            setShowConference(true);
+          }}
+          className={css.buttonJoin}
+        >
+          войти 📞
+        </button>
+      </div>
+    );
+  }
   return (
     <div className={css.wrapper}>
-      {/* <div id="tracks"></div> */}
-
-      {/* <div>microphone volume:{String(microphoneVolume)}</div>
-      <div>speaker volume: {speakerVolume}</div> */}
-
       <div className={css.top}>{renderUsers()}</div>
       <div className={css.bottom}>
         {renderUser()}
@@ -621,9 +660,11 @@ const Conference = () => {
                 }
                 if (refMediaStreamManager.current.isMicrophoneMuted) {
                   refMediaStreamManager.current.microphoneUnmute();
+                  transport.sendEvent({ type: "unmute", user });
                   update({ isMutedMicrophone: false });
                 } else {
                   refMediaStreamManager.current.microphoneMute();
+                  transport.sendEvent({ type: "mute", user });
                   update({ isMutedMicrophone: true });
                 }
               }
@@ -646,8 +687,6 @@ const Conference = () => {
 };
 
 export const VoiceChat = () => {
-  const [showConference, setShowConference] = useState<boolean>(false);
-
   const refContainer = useRef<HTMLDivElement>(null);
   useEffect(() => {
     const set100vh = () => {
@@ -661,38 +700,11 @@ export const VoiceChat = () => {
       window.removeEventListener("resize", set100vh);
     };
   }, []);
-
-  const renderContent = () => {
-    if (!showConference) {
-      return (
-        <div
-          style={{
-            height: "100%",
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-          }}
-        >
-          <button
-            onClick={() => {
-              setShowConference(true);
-            }}
-            className={css.buttonJoin}
-          >
-            войти 📞
-          </button>
-        </div>
-      );
-    }
-    return <Conference />;
-  };
-
   return (
     <StoreProvider>
       <div className={css.container} ref={refContainer}>
         <ErrorBoundary>
-          {/* <Sandbox /> */}
-          {renderContent()}
+          <Conference />
         </ErrorBoundary>
       </div>
     </StoreProvider>
