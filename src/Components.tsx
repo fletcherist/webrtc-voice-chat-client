@@ -5,9 +5,9 @@ import { User } from "./api";
 
 export const Storybook: React.FC = () => {
   return (
-    <div>
+    <div style={{ padding: 10 }}>
       <div>
-        <h3>room user</h3>
+        <h3>icons</h3>
         <ButtonMicrohoneContainer />
         <ButtonSpeakerContainer />
 
@@ -24,6 +24,10 @@ export const Storybook: React.FC = () => {
             onClickMuteMicrohone={() => undefined}
             onClickMuteSpeaker={() => undefined}
           />
+        </div>
+        <div style={{ width: 400 }}>
+          <h3>user remote</h3>
+          <UserRemoteStory />
         </div>
       </div>
     </div>
@@ -69,6 +73,65 @@ export const UserMe: React.FC<{
           }}
         />
       </div>
+    </div>
+  );
+};
+
+const UserRemoteStory = () => {
+  const [isMuted, setIsMuted] = useState(true);
+  return (
+    <div>
+      <div>
+        <label>
+          <input
+            type="checkbox"
+            onChange={() => setIsMuted(!isMuted)}
+            checked={isMuted}
+          />
+          muted
+        </label>
+      </div>
+      <div style={{ backgroundColor: "rgba(0,0,0,0.1)" }}>
+        <UserRemote user={{ emoji: "😎", id: "1", mute: isMuted }} />
+      </div>
+    </div>
+  );
+};
+export const UserRemote: React.FC<{
+  user: User;
+}> = ({ user }) => {
+  return (
+    <div
+      style={{
+        width: 60,
+        display: "flex",
+        justifyContent: "center",
+        alignItems: "center",
+        pointerEvents: "none",
+        userSelect: "none",
+        position: "relative",
+        backgroundColor: "rgba(0,0,0,0.1)",
+        borderRadius: 16,
+        padding: 10,
+      }}
+      key={user.id}
+    >
+      <div style={{ fontSize: 48 }}>
+        <span>{user.emoji}</span>
+      </div>
+      {user.mute && (
+        <div
+          style={{
+            height: 20,
+            width: 20,
+            position: "absolute",
+            bottom: 5,
+            left: 5,
+          }}
+        >
+          <IconMicrophone muted />
+        </div>
+      )}
     </div>
   );
 };
