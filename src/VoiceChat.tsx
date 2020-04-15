@@ -2,7 +2,7 @@ import * as React from "react";
 import { useRef, useState, useEffect } from "react";
 
 import css from "./VoiceChat.module.css";
-import { UserMe, UserRemote } from "./Components";
+import { UserMe, UsersRemoteList } from "./Components";
 import { useStore, User, TransportEvent, StoreProvider } from "./api";
 
 function sample<T>(list: T[]): T {
@@ -487,26 +487,7 @@ export const Conference = () => {
         </div>
       );
     }
-    return store.state.room.users.map((user) => {
-      return <UserRemote user={user} />;
-    });
-  };
-  const renderUser = () => {
-    if (!user) {
-      return null;
-    }
-    return (
-      <div
-        style={{
-          display: "flex",
-          justifyContent: "center",
-          pointerEvents: "none",
-          userSelect: "none",
-        }}
-      >
-        <div style={{ fontSize: 96 }}>{user.emoji}</div>
-      </div>
-    );
+    return <UsersRemoteList users={store.state.room.users} />;
   };
 
   const [showConference, setShowConference] = useState<boolean>(false);

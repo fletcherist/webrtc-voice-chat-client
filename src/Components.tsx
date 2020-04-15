@@ -29,7 +29,49 @@ export const Storybook: React.FC = () => {
           <h3>user remote</h3>
           <UserRemoteStory />
         </div>
+        <div style={{ width: 400 }}>
+          <h3>users list</h3>
+          <UsersRemoteListStory />
+        </div>
       </div>
+    </div>
+  );
+};
+
+const UsersRemoteListStory = () => {
+  return (
+    <div style={{ backgroundColor: "rgba(0,0,0,0.1)" }}>
+      <UsersRemoteList
+        users={[
+          { emoji: "😎", id: "123", mute: false },
+          { emoji: "😎", id: "123", mute: true },
+          { emoji: "😎", id: "123", mute: false },
+        ]}
+      />
+    </div>
+  );
+};
+export const UsersRemoteList: React.FC<{
+  users: User[];
+}> = ({ users }) => {
+  const renderUsers = () => {
+    return users.map((user) => {
+      return (
+        <div style={{ margin: 5 }}>
+          <UserRemote user={user} />
+        </div>
+      );
+    });
+  };
+  return (
+    <div
+      style={{
+        display: "flex",
+        justifyContent: "center",
+        alignItems: "center",
+      }}
+    >
+      {renderUsers()}
     </div>
   );
 };
