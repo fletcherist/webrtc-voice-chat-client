@@ -1,5 +1,5 @@
 import * as React from "react";
-import { useRef, useState, useEffect } from "react";
+import { useRef, useState, useEffect, useContext } from "react";
 
 import css from "./VoiceChat.module.css";
 import { UserMe, UsersRemoteList, EmptyRoom } from "./Components";
@@ -8,6 +8,34 @@ import { useStore, User, TransportEvent, StoreProvider } from "./api";
 function sample<T>(list: T[]): T {
   return list[Math.floor(Math.random() * list.length)];
 }
+
+const createAudioContext = (): AudioContext => {
+  window.AudioContext =
+    window.AudioContext || (window as any).webkitAudioContext;
+  const audioContext = new AudioContext();
+  return audioContext;
+};
+const AudioContextContext = React.createContext<AudioContext | undefined>(
+  undefined
+);
+export const AudioContextProvider: React.FC = ({ children }) => {
+  const refAudioContext = useRef<AudioContext>();
+  if (!refAudioContext.current) {
+    refAudioContext.current = createAudioContext();
+  }
+  return (
+    <AudioContextContext.Provider value={refAudioContext.current}>
+      {children}
+    </AudioContextContext.Provider>
+  );
+};
+export const useAudioContext = (): AudioContext => {
+  const audioContext = useContext(AudioContextContext);
+  if (!audioContext) {
+    throw new Error("AudioContext is not initialized");
+  }
+  return audioContext; // audio context is always defined, but may be in suspended state
+};
 
 class MediaStreamManager {
   public audioContext: AudioContext;
@@ -23,13 +51,9 @@ class MediaStreamManager {
 
   public isMicrophoneRequested: boolean;
 
-  constructor() {
+  constructor(audioContext: AudioContext) {
     this.isMicrophoneRequested = false;
-
-    const AudioContext =
-      window.AudioContext || (window as any).webkitAudioContext;
-
-    this.audioContext = new AudioContext();
+    this.audioContext = audioContext;
 
     // this.oscillator = this.audioContext.createOscillator();
     // this.oscillatorGain = this.audioContext.createGain();
@@ -307,10 +331,10 @@ export const Conference = () => {
   // const [micEnabled, setMicEnabled] = useState<boolean>(DEFAULT_MIC_ENABLED);
   // const [microphoneVolume, setMicrophoneVolume] = useState<number>(0);
   // const [speakerVolume, setSpeakerVolume] = useState<number>(0);
-
+  const audioContext = useAudioContext();
   const refMediaStreamManager = useRef<MediaStreamManager>();
   if (!refMediaStreamManager.current) {
-    refMediaStreamManager.current = new MediaStreamManager();
+    refMediaStreamManager.current = new MediaStreamManager(audioContext);
   }
   // const refAudioElBach = useRef<HTMLMediaElement | null>(null);
   const store = useStore();
@@ -398,39 +422,6 @@ export const Conference = () => {
     });
   }, [store]);
 
-  // useEffect(() => {
-  //   const handleUnmuteMicrophone = (event: KeyboardEvent) => {
-  //     try {
-  //       if (event.key === "Shift") {
-  //         if (refMediaStreamManager.current) {
-  //           refMediaStreamManager.current.microphoneUnmute();
-  //           setMicEnabled(true);
-  //         }
-  //       }
-  //     } catch (error) {
-  //       log(error);
-  //     }
-  //   };
-  //   const handleMuteMicrophone = (event: KeyboardEvent) => {
-  //     try {
-  //       if (event.key === "Shift") {
-  //         if (refMediaStreamManager.current) {
-  //           refMediaStreamManager.current.microphoneUnmute();
-  //           setMicEnabled(false);
-  //         }
-  //       }
-  //     } catch (error) {
-  //       log(error);
-  //     }
-  //   };
-  //   window.addEventListener("keydown", handleUnmuteMicrophone);
-  //   window.addEventListener("keyup", handleMuteMicrophone);
-  //   return () => {
-  //     window.removeEventListener("keydown", handleUnmuteMicrophone);
-  //     window.removeEventListener("keyup", handleMuteMicrophone);
-  //   };
-  // }, []);
-
   const renderUsers = () => {
     if (state.room.users.length === 0) {
       return <EmptyRoom />;
@@ -451,7 +442,11 @@ export const Conference = () => {
         }}
       >
         <button
-          onClick={() => {
+          onClick={async () => {
+            if (audioContext.state === "suspended") {
+              console.log("audio context was in suspended state. resuming...");
+              await audioContext.resume();
+            }
             setShowConference(true);
           }}
           className={css.buttonJoin}
@@ -515,17 +510,51 @@ export const VoiceChat = () => {
     };
   }, []);
   return (
-    <StoreProvider>
-      <div className={css.container} ref={refContainer}>
-        <ErrorBoundary>
-          <Conference />
-        </ErrorBoundary>
-      </div>
-    </StoreProvider>
+    <AudioContextProvider>
+      <StoreProvider>
+        <div className={css.container} ref={refContainer}>
+          <ErrorBoundary>
+            <Conference />
+          </ErrorBoundary>
+        </div>
+      </StoreProvider>
+    </AudioContextProvider>
   );
 };
 
 const Trash = () => {
+  // useEffect(() => {
+  //   const handleUnmuteMicrophone = (event: KeyboardEvent) => {
+  //     try {
+  //       if (event.key === "Shift") {
+  //         if (refMediaStreamManager.current) {
+  //           refMediaStreamManager.current.microphoneUnmute();
+  //           setMicEnabled(true);
+  //         }
+  //       }
+  //     } catch (error) {
+  //       log(error);
+  //     }
+  //   };
+  //   const handleMuteMicrophone = (event: KeyboardEvent) => {
+  //     try {
+  //       if (event.key === "Shift") {
+  //         if (refMediaStreamManager.current) {
+  //           refMediaStreamManager.current.microphoneUnmute();
+  //           setMicEnabled(false);
+  //         }
+  //       }
+  //     } catch (error) {
+  //       log(error);
+  //     }
+  //   };
+  //   window.addEventListener("keydown", handleUnmuteMicrophone);
+  //   window.addEventListener("keyup", handleMuteMicrophone);
+  //   return () => {
+  //     window.removeEventListener("keydown", handleUnmuteMicrophone);
+  //     window.removeEventListener("keyup", handleMuteMicrophone);
+  //   };
+  // }, []);
   return (
     <div>
       {/* <div>

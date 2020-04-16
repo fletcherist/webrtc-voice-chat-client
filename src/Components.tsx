@@ -1,7 +1,8 @@
 // pure components and storybook-like sandbox
-import React, { useState, useRef, useEffect, useContext } from "react";
+import React, { useState } from "react";
 import css from "./VoiceChat.module.css";
 import { User } from "./api";
+import { useAudioContext, AudioContextProvider } from "./VoiceChat";
 
 export const Storybook: React.FC = () => {
   return (
@@ -76,34 +77,6 @@ const getMediaStreamVolume = (
     }
     // callback(rms);
   };
-};
-
-const createAudioContext = (): AudioContext => {
-  window.AudioContext =
-    window.AudioContext || (window as any).webkitAudioContext;
-  const audioContext = new AudioContext();
-  return audioContext;
-};
-const AudioContextContext = React.createContext<AudioContext | undefined>(
-  undefined
-);
-const AudioContextProvider: React.FC = ({ children }) => {
-  const refAudioContext = useRef<AudioContext>();
-  if (!refAudioContext.current) {
-    refAudioContext.current = createAudioContext();
-  }
-  return (
-    <AudioContextContext.Provider value={refAudioContext.current}>
-      {children}
-    </AudioContextContext.Provider>
-  );
-};
-const useAudioContext = (): AudioContext => {
-  const audioContext = useContext(AudioContextContext);
-  if (!audioContext) {
-    throw new Error("AudioContext is not initialized");
-  }
-  return audioContext; // audio context is always defined, but may be in suspended state
 };
 
 const MicrophoneVolumeAnalyserWrapper = () => {
