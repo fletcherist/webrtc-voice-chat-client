@@ -37,11 +37,36 @@ export const useAudioContext = (): AudioContext => {
   return audioContext; // audio context is always defined, but may be in suspended state
 };
 
+const MediaStreamManagerContext = React.createContext<
+  MediaStreamManager | undefined
+>(undefined);
+const MediaStreamManagerProvider: React.FC = ({ children }) => {
+  const audioContext = useAudioContext();
+  const refMediaStreamManager = useRef<MediaStreamManager>();
+  if (!refMediaStreamManager.current) {
+    refMediaStreamManager.current = new MediaStreamManager(audioContext);
+  }
+  return (
+    <MediaStreamManagerContext.Provider value={refMediaStreamManager.current}>
+      {children}
+    </MediaStreamManagerContext.Provider>
+  );
+};
+const useMediaStreamManager = (): MediaStreamManager => {
+  const mediaStreamManager = useContext(MediaStreamManagerContext);
+  if (!mediaStreamManager) {
+    throw new Error("Media stream manager is not connected");
+  }
+  return mediaStreamManager;
+};
+
 class MediaStreamManager {
   public audioContext: AudioContext;
-  public gainMaster: GainNode;
+  public inputGain: GainNode;
+  public outputGain: GainNode;
 
-  private mediaStreamDestination: MediaStreamAudioDestinationNode;
+  private inputStreamDestination: MediaStreamAudioDestinationNode;
+  private outputStreamDestination: MediaStreamAudioDestinationNode;
 
   private microphone: MediaStreamAudioSourceNode | undefined;
   private microphoneGain: GainNode | undefined;
@@ -59,10 +84,11 @@ class MediaStreamManager {
     // this.oscillatorGain = this.audioContext.createGain();
     // this.disableOscillator();
 
-    this.gainMaster = this.audioContext.createGain();
+    this.inputGain = this.audioContext.createGain();
+    this.outputGain = this.audioContext.createGain();
 
     // this.oscillator.connect(this.oscillatorGain);
-    // this.oscillatorGain.connect(this.gainMaster);
+    // this.oscillatorGain.connect(this.inputGain);
 
     // this.oscillator.detune.value = 100;
     // this.oscillator.frequency.value = sample([
@@ -78,14 +104,20 @@ class MediaStreamManager {
 
     // this.oscillator.start(0);
 
-    this.mediaStreamDestination = this.audioContext.createMediaStreamDestination();
-    this.gainMaster.connect(this.mediaStreamDestination);
+    this.inputStreamDestination = this.audioContext.createMediaStreamDestination();
+    this.inputGain.connect(this.inputStreamDestination);
+    this.inputGain.gain.value = 1;
 
-    this.gainMaster.gain.value = 1;
+    this.outputStreamDestination = this.audioContext.createMediaStreamDestination();
+    this.outputGain.connect(this.outputStreamDestination);
+    this.outputGain.gain.value = 1;
   }
 
-  public getStream(): MediaStream {
-    return this.mediaStreamDestination.stream;
+  public getInputStream(): MediaStream {
+    return this.inputStreamDestination.stream;
+  }
+  public getOutputStream(): MediaStream {
+    return this.inputStreamDestination.stream;
   }
 
   public async requestMicrophone(): Promise<void> {
@@ -99,18 +131,25 @@ class MediaStreamManager {
       this.microphoneGain = this.audioContext.createGain();
       this.microphoneGain.gain.value = 0; // mute by default
       this.microphone.connect(this.microphoneGain);
-      this.microphoneGain.connect(this.gainMaster);
+      this.microphoneGain.connect(this.inputGain);
     } catch (error) {
       this.isMicrophoneRequested = false;
       return undefined;
     }
   }
 
+  public addOutputTrack(stream: MediaStream) {
+    const outputStreamSource = this.audioContext.createMediaStreamSource(
+      stream
+    );
+    outputStreamSource.connect(this.outputGain);
+  }
+
   mute() {
-    this.gainMaster.gain.value = 0;
+    this.inputGain.gain.value = 0;
   }
   unmute() {
-    this.gainMaster.gain.value = 1;
+    this.inputGain.gain.value = 1;
   }
 
   get isMicrophoneMuted(): boolean {
@@ -236,6 +275,7 @@ const usePeerConnection = ({
 }: {
   transport: Transport;
 }): RTCPeerConnection => {
+  const mediaStreamManager = useMediaStreamManager();
   const refPeerConnection = useRef<RTCPeerConnection>(
     new RTCPeerConnection({
       iceServers: [
@@ -246,11 +286,6 @@ const usePeerConnection = ({
     })
   );
   const peerConnection = refPeerConnection.current;
-  const { current: state } = useRef<{
-    isSendingOffer: boolean;
-  }>({
-    isSendingOffer: false,
-  });
 
   useEffect(() => {
     const handleTrack = async (event: RTCTrackEvent) => {
@@ -259,19 +294,20 @@ const usePeerConnection = ({
       console.log(event.track.kind, event.streams);
       const stream = event.streams[0];
       try {
+        mediaStreamManager.addOutputTrack(stream);
         // if (refAudioEl.current) {
         //   refAudioEl.current.srcObject = stream;
         //   refAudioEl.current.autoplay = true;
         //   refAudioEl.current.controls = true;
         //   await refAudioEl.current.play();
         // }
-        const audioEl = document.createElement("audio");
-        console.log("attached speaker volume");
-        audioEl.srcObject = stream;
-        audioEl.autoplay = true;
-        audioEl.controls = true;
-        document.querySelector("#tracks")?.appendChild(audioEl);
-        await audioEl.play();
+        // const audioEl = document.createElement("audio");
+        // console.log("attached speaker volume");
+        // audioEl.srcObject = stream;
+        // audioEl.autoplay = true;
+        // audioEl.controls = true;
+        // document.querySelector("#tracks")?.appendChild(audioEl);
+        // await audioEl.play();
       } catch (error) {
         console.log(error);
       }
@@ -332,10 +368,10 @@ export const Conference = () => {
   // const [microphoneVolume, setMicrophoneVolume] = useState<number>(0);
   // const [speakerVolume, setSpeakerVolume] = useState<number>(0);
   const audioContext = useAudioContext();
-  const refMediaStreamManager = useRef<MediaStreamManager>();
-  if (!refMediaStreamManager.current) {
-    refMediaStreamManager.current = new MediaStreamManager(audioContext);
-  }
+  const mediaStreamManager = useMediaStreamManager();
+
+  const refAudioEl = useRef<HTMLAudioElement | null>(null);
+
   // const refAudioElBach = useRef<HTMLMediaElement | null>(null);
   const store = useStore();
   const { state, update } = store;
@@ -355,17 +391,10 @@ export const Conference = () => {
   };
 
   const subscribe = async () => {
-    try {
-      if (!refMediaStreamManager.current) {
-        throw new Error("no media stream manager");
-      }
-      const mediaStream = refMediaStreamManager.current.getStream();
-      const audioTracks = mediaStream.getAudioTracks();
-      for (const track of audioTracks) {
-        peerConnection.addTrack(track, mediaStream);
-      }
-    } catch (error) {
-      log(error);
+    const mediaStream = mediaStreamManager.getInputStream();
+    const audioTracks = mediaStream.getAudioTracks();
+    for (const track of audioTracks) {
+      peerConnection.addTrack(track, mediaStream);
     }
   };
 
@@ -431,66 +460,84 @@ export const Conference = () => {
 
   const [showConference, setShowConference] = useState<boolean>(false);
 
-  if (!showConference) {
-    return (
-      <div
-        style={{
-          height: "100%",
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "center",
-        }}
-      >
-        <button
-          onClick={async () => {
-            if (audioContext.state === "suspended") {
-              console.log("audio context was in suspended state. resuming...");
-              await audioContext.resume();
-            }
-            setShowConference(true);
+  const renderContent = () => {
+    if (!showConference) {
+      return (
+        <div
+          style={{
+            height: "100%",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
           }}
-          className={css.buttonJoin}
         >
-          войти 📞
-        </button>
-      </div>
-    );
-  }
-  return (
-    <div className={css.wrapper}>
-      <div className={css.top}>{renderUsers()}</div>
-      <div className={css.bottom}>
-        {user && (
-          <UserMe
-            user={user}
-            isMutedMicrophone={state.isMutedMicrophone}
-            isMutedSpeaker={state.isMutedSpeaker}
-            onClickMuteSpeaker={() => {
-              try {
-                update({ isMutedSpeaker: !state.isMutedSpeaker });
-              } catch (error) {
-                alert(error);
+          <button
+            onClick={async () => {
+              if (audioContext.state === "suspended") {
+                console.log(
+                  "audio context was in suspended state. resuming..."
+                );
+                await audioContext.resume();
               }
+              const outputStream = mediaStreamManager.getOutputStream();
+              console.log("refAudioEl.current", refAudioEl.current);
+              if (!refAudioEl.current) {
+                throw new Error("no audio node");
+              }
+              refAudioEl.current.srcObject = outputStream;
+              refAudioEl.current.autoplay = true;
+              refAudioEl.current.controls = true;
+              await refAudioEl.current.play();
+              setShowConference(true);
             }}
-            onClickMuteMicrohone={async (event) => {
-              if (refMediaStreamManager.current) {
-                if (!refMediaStreamManager.current.isMicrophoneRequested) {
-                  await refMediaStreamManager.current.requestMicrophone();
+            className={css.buttonJoin}
+          >
+            войти 📞
+          </button>
+        </div>
+      );
+    }
+
+    return (
+      <div className={css.wrapper}>
+        <div className={css.top}>{renderUsers()}</div>
+        <div className={css.bottom}>
+          {user && (
+            <UserMe
+              user={user}
+              isMutedMicrophone={state.isMutedMicrophone}
+              isMutedSpeaker={state.isMutedSpeaker}
+              onClickMuteSpeaker={() => {
+                try {
+                  update({ isMutedSpeaker: !state.isMutedSpeaker });
+                } catch (error) {
+                  alert(error);
                 }
-                if (refMediaStreamManager.current.isMicrophoneMuted) {
-                  refMediaStreamManager.current.microphoneUnmute();
+              }}
+              onClickMuteMicrohone={async (event) => {
+                if (!mediaStreamManager.isMicrophoneRequested) {
+                  await mediaStreamManager.requestMicrophone();
+                }
+                if (mediaStreamManager.isMicrophoneMuted) {
+                  mediaStreamManager.microphoneUnmute();
                   transport.sendEvent({ type: "unmute", user });
                   update({ isMutedMicrophone: false });
                 } else {
-                  refMediaStreamManager.current.microphoneMute();
+                  mediaStreamManager.microphoneMute();
                   transport.sendEvent({ type: "mute", user });
                   update({ isMutedMicrophone: true });
                 }
-              }
-            }}
-          />
-        )}
+              }}
+            />
+          )}
+        </div>
       </div>
+    );
+  };
+  return (
+    <div>
+      <audio ref={refAudioEl} />
+      {renderContent()}
     </div>
   );
 };
@@ -511,13 +558,15 @@ export const VoiceChat = () => {
   }, []);
   return (
     <AudioContextProvider>
-      <StoreProvider>
-        <div className={css.container} ref={refContainer}>
-          <ErrorBoundary>
-            <Conference />
-          </ErrorBoundary>
-        </div>
-      </StoreProvider>
+      <MediaStreamManagerProvider>
+        <StoreProvider>
+          <div className={css.container} ref={refContainer}>
+            <ErrorBoundary>
+              <Conference />
+            </ErrorBoundary>
+          </div>
+        </StoreProvider>
+      </MediaStreamManagerProvider>
     </AudioContextProvider>
   );
 };
@@ -568,7 +617,7 @@ const Trash = () => {
               const gainMedia = refMediaStreamManager.current.audioContext.createGain();
               mediaElementSource.connect(gainMedia);
               gainMedia.gain.value = 0.05;
-              gainMedia.connect(refMediaStreamManager.current.gainMaster);
+              gainMedia.connect(refMediaStreamManager.current.inputGain);
               refAudioElBach.current.play();
             }
           }}
