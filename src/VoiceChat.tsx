@@ -2,7 +2,7 @@ import * as React from "react";
 import { useRef, useState, useEffect } from "react";
 
 import css from "./VoiceChat.module.css";
-import { UserMe, UsersRemoteList } from "./Components";
+import { UserMe, UsersRemoteList, EmptyRoom } from "./Components";
 import { useStore, User, TransportEvent, StoreProvider } from "./api";
 
 function sample<T>(list: T[]): T {
@@ -462,30 +462,7 @@ export const Conference = () => {
 
   const renderUsers = () => {
     if (state.room.users.length === 0) {
-      return (
-        <div
-          style={{
-            display: "flex",
-            flexDirection: "column",
-            height: "100%",
-            justifyContent: "center",
-          }}
-        >
-          <div
-            style={{
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              fontSize: 60,
-            }}
-          >
-            👀
-          </div>
-          <div style={{ textAlign: "center", fontSize: 16, color: "white" }}>
-            ждём остальных...
-          </div>
-        </div>
-      );
+      return <EmptyRoom />;
     }
     return <UsersRemoteList users={store.state.room.users} />;
   };

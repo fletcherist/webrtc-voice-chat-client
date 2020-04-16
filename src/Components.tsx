@@ -33,6 +33,10 @@ export const Storybook: React.FC = () => {
           <h3>users list</h3>
           <UsersRemoteListStory />
         </div>
+        <div>
+          <h3>empty room</h3>
+          <EmptyRoomStory />
+        </div>
       </div>
     </div>
   );
@@ -51,6 +55,43 @@ const UsersRemoteListStory = () => {
     </div>
   );
 };
+
+const EmptyRoomStory = () => {
+  return (
+    <div
+      style={{ backgroundColor: "rgba(0,0,0,0.1)", height: 400, width: 400 }}
+    >
+      <EmptyRoom />
+    </div>
+  );
+};
+export const EmptyRoom = () => {
+  return (
+    <div
+      style={{
+        display: "flex",
+        flexDirection: "column",
+        height: "100%",
+        justifyContent: "center",
+      }}
+    >
+      <div
+        style={{
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          fontSize: 60,
+        }}
+      >
+        👀
+      </div>
+      <div style={{ textAlign: "center", fontSize: 16, color: "white" }}>
+        ждём остальных...
+      </div>
+    </div>
+  );
+};
+
 export const UsersRemoteList: React.FC<{
   users: User[];
 }> = ({ users }) => {
