@@ -1,5 +1,5 @@
 // pure components and storybook-like sandbox
-import React, { useState } from "react";
+import React, { useState, useRef, useEffect, useContext } from "react";
 import css from "./VoiceChat.module.css";
 import { User } from "./api";
 
@@ -37,22 +37,109 @@ export const Storybook: React.FC = () => {
           <h3>empty room</h3>
           <EmptyRoomStory />
         </div>
+        <div>
+          <h3>microphone volume analyser</h3>
+          <MicrophoneVolumeAnalyser />
+        </div>
       </div>
     </div>
   );
 };
 
-const UsersRemoteListStory = () => {
+const getMediaStreamVolume = (
+  audioContext: AudioContext,
+  mediaStream: MediaStream,
+  callback: (isSpeaking: boolean) => void
+) => {
+  const analyser = audioContext.createAnalyser();
+  const mediaStreamSource = audioContext.createMediaStreamSource(mediaStream);
+  const processor = audioContext.createScriptProcessor(512);
+
+  analyser.smoothingTimeConstant = 0.8;
+  analyser.fftSize = 1024;
+
+  mediaStreamSource.connect(analyser);
+  analyser.connect(processor);
+  processor.connect(audioContext.destination);
+  processor.onaudioprocess = function (event) {
+    const buf = event.inputBuffer.getChannelData(0);
+    let sum = 0;
+    for (let i = 0; i < buf.length; i++) {
+      const x = buf[i];
+      sum += x * x;
+    }
+    const rms = Math.sqrt(sum / buf.length);
+    if (rms > 0.05) {
+      callback(true);
+    } else {
+      callback(false);
+    }
+    // callback(rms);
+  };
+};
+
+const createAudioContext = (): AudioContext => {
+  window.AudioContext =
+    window.AudioContext || (window as any).webkitAudioContext;
+  const audioContext = new AudioContext();
+  return audioContext;
+};
+const AudioContextContext = React.createContext<AudioContext | undefined>(
+  undefined
+);
+const AudioContextProvider: React.FC = ({ children }) => {
+  const refAudioContext = useRef<AudioContext>();
+  if (!refAudioContext.current) {
+    refAudioContext.current = createAudioContext();
+  }
   return (
-    <div style={{ backgroundColor: "rgba(0,0,0,0.1)" }}>
-      <UsersRemoteList
-        users={[
-          { emoji: "😎", id: "123", mute: false },
-          { emoji: "😎", id: "123", mute: true },
-          { emoji: "😎", id: "123", mute: false },
-        ]}
-      />
+    <AudioContextContext.Provider value={refAudioContext.current}>
+      {children}
+    </AudioContextContext.Provider>
+  );
+};
+const useAudioContext = (): AudioContext => {
+  const audioContext = useContext(AudioContextContext);
+  if (!audioContext) {
+    throw new Error("AudioContext is not initialized");
+  }
+  return audioContext; // audio context is always defined, but may be in suspended state
+};
+
+const MicrophoneVolumeAnalyserWrapper = () => {
+  const audioContext = useAudioContext();
+  return (
+    <div>
+      <button
+        onClick={async () => {
+          try {
+            if (audioContext.state === "suspended") {
+              alert("suspended");
+              await audioContext.resume();
+            }
+            const stream = await navigator.mediaDevices.getUserMedia({
+              audio: true,
+              video: false,
+            });
+            console.log(stream);
+            getMediaStreamVolume(audioContext, stream, (volume) => {
+              console.log(volume);
+            });
+          } catch (error) {
+            console.error(error);
+          }
+        }}
+      >
+        request
+      </button>
     </div>
+  );
+};
+const MicrophoneVolumeAnalyser = () => {
+  return (
+    <AudioContextProvider>
+      <MicrophoneVolumeAnalyserWrapper />
+    </AudioContextProvider>
   );
 };
 
@@ -92,6 +179,19 @@ export const EmptyRoom = () => {
   );
 };
 
+const UsersRemoteListStory = () => {
+  return (
+    <div style={{ backgroundColor: "rgba(0,0,0,0.1)" }}>
+      <UsersRemoteList
+        users={[
+          { emoji: "😎", id: "123", mute: false },
+          { emoji: "😎", id: "123", mute: true },
+          { emoji: "😎", id: "123", mute: false },
+        ]}
+      />
+    </div>
+  );
+};
 export const UsersRemoteList: React.FC<{
   users: User[];
 }> = ({ users }) => {

@@ -9,35 +9,6 @@ function sample<T>(list: T[]): T {
   return list[Math.floor(Math.random() * list.length)];
 }
 
-const getMediaStreamVolume = (
-  mediaStream: MediaStream,
-  callback: (volume: number) => void
-) => {
-  window.AudioContext =
-    window.AudioContext || (window as any).webkitAudioContext;
-  const audioContext = new AudioContext();
-  const analyser = audioContext.createAnalyser();
-  const mediaStreamSource = audioContext.createMediaStreamSource(mediaStream);
-  const processor = audioContext.createScriptProcessor(512);
-
-  analyser.smoothingTimeConstant = 0.8;
-  analyser.fftSize = 1024;
-
-  mediaStreamSource.connect(analyser);
-  analyser.connect(processor);
-  processor.connect(audioContext.destination);
-  processor.onaudioprocess = function (event) {
-    const buf = event.inputBuffer.getChannelData(0);
-    let sum = 0;
-    for (let i = 0; i < buf.length; i++) {
-      const x = buf[i];
-      sum += x * x;
-    }
-    const rms = Math.sqrt(sum / buf.length);
-    callback(rms);
-  };
-};
-
 class MediaStreamManager {
   public audioContext: AudioContext;
   public gainMaster: GainNode;
