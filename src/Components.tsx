@@ -171,7 +171,7 @@ export const UsersRemoteList: React.FC<{
   const renderUsers = () => {
     return users.map((user) => {
       return (
-        <div style={{ margin: 5 }}>
+        <div style={{ margin: 5 }} key={user.id}>
           <UserRemote user={user} />
         </div>
       );

@@ -246,10 +246,8 @@ class WebSocketTransport implements Transport {
   public sendCandidate(candidate: RTCIceCandidateInit) {
     this.sendEvent({ type: "candidate", candidate });
   }
-  public requestOffer() {
-    this.sendEvent({ type: "request_offer" });
-  }
   public sendEvent(event: TransportEvent) {
+    console.log("[transport]sendEvent", event.type);
     this.ws.send(JSON.stringify(event));
   }
 
@@ -288,88 +286,6 @@ class WebSocketTransport implements Transport {
   }
 }
 
-const usePeerConnection = ({
-  transport,
-}: {
-  transport: Transport;
-}): RTCPeerConnection => {
-  const mediaStreamManager = useMediaStreamManager();
-  const refPeerConnection = useRef<RTCPeerConnection>(
-    new RTCPeerConnection({
-      iceServers: [{ urls: "stun:stun.l.google.com:19302" }],
-    })
-  );
-  const peerConnection = refPeerConnection.current;
-
-  useEffect(() => {
-    const handleTrack = async (event: RTCTrackEvent) => {
-      console.log(event);
-      console.log(`peerConnection::ontrack ${event.track.kind}`);
-      console.log(event.track.kind, event.streams);
-      const stream = event.streams[0];
-      try {
-        mediaStreamManager.addOutputTrack(stream);
-        // // works
-        // const audio = document.createElement("audio");
-        // audio.srcObject = stream;
-        // audio.autoplay = true;
-        // audio.play();
-      } catch (error) {
-        console.error(error);
-        alert(error);
-      }
-    };
-    const handleConnectionStateChange = (event: Event) => {
-      console.log(
-        `peerConnection::onIceConnectionStateChange ${peerConnection.iceConnectionState}`
-      );
-    };
-    const handleICECandidate = (event: RTCPeerConnectionIceEvent) => {
-      if (event.candidate) {
-        transport.sendCandidate(event.candidate.toJSON());
-      }
-    };
-
-    const handleNegotiationNeeded = async (event: Event) => {
-      // console.log("peerConnection::negotiationneeded", event);
-      // await peerConnection.setLocalDescription(
-      //   await peerConnection.createOffer()
-      // );
-      // if (!peerConnection.localDescription) {
-      //   throw new Error("no local description");
-      // }
-      // transport.sendOffer(peerConnection.localDescription);
-    };
-
-    peerConnection.addEventListener("track", handleTrack);
-    peerConnection.addEventListener(
-      "iceconnectionstatechange",
-      handleConnectionStateChange
-    );
-
-    peerConnection.addEventListener(
-      "negotiationneeded",
-      handleNegotiationNeeded
-    );
-    peerConnection.addEventListener("icecandidate", handleICECandidate);
-
-    return () => {
-      peerConnection.removeEventListener("track", handleTrack);
-      peerConnection.removeEventListener(
-        "connectionstatechange",
-        handleConnectionStateChange
-      );
-      peerConnection.removeEventListener("icecandidate", handleICECandidate);
-      peerConnection.removeEventListener(
-        "negotiationneeded",
-        handleNegotiationNeeded
-      );
-    };
-  }, []);
-
-  return refPeerConnection.current;
-};
-
 export const Conference = () => {
   // const [micEnabled, setMicEnabled] = useState<boolean>(DEFAULT_MIC_ENABLED);
   // const [microphoneVolume, setMicrophoneVolume] = useState<number>(0);
@@ -391,20 +307,68 @@ export const Conference = () => {
     );
   }
   const transport = refTransport.current;
-  const peerConnection = usePeerConnection({ transport });
+  // const peerConnection = usePeerConnection({ transport });
+
+  const refPeerConnection = useRef<RTCPeerConnection>(
+    new RTCPeerConnection({
+      iceServers: [{ urls: "stun:stun.l.google.com:19302" }],
+    })
+  );
+  const peerConnection = refPeerConnection.current;
 
   const log = (msg: any) => {
     console.log(msg);
   };
 
   const subscribe = async () => {
+    peerConnection.ontrack = async (event: RTCTrackEvent) => {
+      console.log(event);
+      console.log(`peerConnection::ontrack ${event.track.kind}`);
+      console.log(event.track.kind, event.streams);
+      const stream = event.streams[0];
+      try {
+        // mediaStreamManager.addOutputTrack(stream);
+        // // works
+        // alert("adding track");
+        const audio = document.createElement("audio");
+        audio.srcObject = stream;
+        audio.autoplay = true;
+        // audio.controls = true;
+        // audio.addEventListener('')
+        audio.play();
+        document.body.appendChild(audio);
+      } catch (error) {
+        alert(error);
+        console.error(error);
+      }
+    };
+    peerConnection.onconnectionstatechange = () => {
+      console.log(
+        `peerConnection::onIceConnectionStateChange ${peerConnection.iceConnectionState}`
+      );
+    };
+    peerConnection.onicecandidate = (event: RTCPeerConnectionIceEvent) => {
+      if (event.candidate) {
+        transport.sendCandidate(event.candidate.toJSON());
+      }
+    };
+    peerConnection.onnegotiationneeded = async (event: Event) => {
+      console.log("peerConnection::negotiationneeded", event);
+      await peerConnection.setLocalDescription(
+        await peerConnection.createOffer()
+      );
+      if (!peerConnection.localDescription) {
+        throw new Error("no local description");
+      }
+      transport.sendOffer(peerConnection.localDescription);
+    };
+
     const mediaStream = mediaStreamManager.getInputStream();
     const audioTracks = mediaStream.getAudioTracks();
     console.log("[subscribe]: audioTracks", audioTracks);
     for (const track of audioTracks) {
       peerConnection.addTrack(track, mediaStream);
     }
-    transport.requestOffer();
   };
 
   useEffect(() => {
@@ -428,7 +392,6 @@ export const Conference = () => {
     });
     transport.onEvent(async (event) => {
       console.log("EVENT", event);
-
       if (event.type === "user_join") {
         if (!event.user) {
           throw new Error("no user");

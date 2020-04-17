@@ -7,7 +7,6 @@ export interface TransportEvent {
     | "answer"
     | "candidate"
     | "error"
-    | "request_offer"
     | "user"
     | "user_join"
     | "user_leave"
