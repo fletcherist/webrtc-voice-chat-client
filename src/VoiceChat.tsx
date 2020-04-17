@@ -295,19 +295,6 @@ const usePeerConnection = ({
       const stream = event.streams[0];
       try {
         mediaStreamManager.addOutputTrack(stream);
-        // if (refAudioEl.current) {
-        //   refAudioEl.current.srcObject = stream;
-        //   refAudioEl.current.autoplay = true;
-        //   refAudioEl.current.controls = true;
-        //   await refAudioEl.current.play();
-        // }
-        // const audioEl = document.createElement("audio");
-        // console.log("attached speaker volume");
-        // audioEl.srcObject = stream;
-        // audioEl.autoplay = true;
-        // audioEl.controls = true;
-        // document.querySelector("#tracks")?.appendChild(audioEl);
-        // await audioEl.play();
       } catch (error) {
         console.log(error);
       }
@@ -486,8 +473,13 @@ export const Conference = () => {
               }
               refAudioEl.current.srcObject = outputStream;
               refAudioEl.current.autoplay = true;
-              refAudioEl.current.controls = true;
-              await refAudioEl.current.play();
+              // refAudioEl.current.controls = true;
+              try {
+                await refAudioEl.current.play();
+              } catch (error) {
+                alert(error);
+                console.error(error);
+              }
               setShowConference(true);
             }}
             className={css.buttonJoin}
