@@ -460,26 +460,33 @@ export const Conference = () => {
         >
           <button
             onClick={async () => {
-              if (audioContext.state === "suspended") {
-                console.log(
-                  "audio context was in suspended state. resuming..."
-                );
-                await audioContext.resume();
-              }
-              const outputStream = mediaStreamManager.getOutputStream();
-              console.log("refAudioEl.current", refAudioEl.current);
-              if (!refAudioEl.current) {
-                throw new Error("no audio node");
-              }
-              refAudioEl.current.srcObject = outputStream;
-              refAudioEl.current.autoplay = true;
-              // refAudioEl.current.controls = true;
-              try {
-                await refAudioEl.current.play();
-              } catch (error) {
-                alert(error);
-                console.error(error);
-              }
+              const playOutputTrack = async () => {
+                try {
+                  const outputStream = mediaStreamManager.getOutputStream();
+                  console.log("refAudioEl.current", refAudioEl.current);
+                  if (!refAudioEl.current) {
+                    throw new Error("no audio node");
+                  }
+                  refAudioEl.current.srcObject = outputStream;
+                  refAudioEl.current.autoplay = true;
+                  // refAudioEl.current.controls = true;
+                  await refAudioEl.current.play();
+                } catch (error) {
+                  alert(error);
+                  console.error(error);
+                }
+              };
+
+              const resumeAudioContext = async () => {
+                if (audioContext.state === "suspended") {
+                  console.log(
+                    "audio context was in suspended state. resuming..."
+                  );
+                  await audioContext.resume();
+                }
+              };
+              playOutputTrack();
+              resumeAudioContext();
               setShowConference(true);
             }}
             className={css.buttonJoin}
