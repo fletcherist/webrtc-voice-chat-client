@@ -126,7 +126,6 @@ class MediaStreamManager {
       const mediaStream = await navigator.mediaDevices.getUserMedia({
         audio: true,
       });
-
       this.microphone = this.audioContext.createMediaStreamSource(mediaStream);
       this.microphoneGain = this.audioContext.createGain();
       this.microphoneGain.gain.value = 0; // mute by default
@@ -139,10 +138,29 @@ class MediaStreamManager {
   }
 
   public addOutputTrack(stream: MediaStream) {
-    const outputStreamSource = this.audioContext.createMediaStreamSource(
-      stream
-    );
-    outputStreamSource.connect(this.outputGain);
+    // const outputStreamSource = this.audioContext.createMediaStreamSource(
+    //   stream
+    // );
+    // const outputStreamGain = this.audioContext.createGain();
+    // outputStreamGain.gain.value = 0.5;
+    // outputStreamSource.connect(outputStreamGain);
+    // outputStreamSource.connect(this.audioContext.destination);
+    // outputStreamGain.connect(this.outputGain);
+    // outputStreamSource.connect(this.outputGain);
+
+    const audio = new Audio();
+    audio.srcObject = stream;
+    const gainNode = this.audioContext.createGain();
+    gainNode.gain.value = 0.5;
+    audio.onloadedmetadata = () => {
+      const source = this.audioContext.createMediaStreamSource(
+        audio.srcObject as MediaStream
+      );
+      audio.play();
+      audio.muted = true;
+      source.connect(gainNode);
+      gainNode.connect(this.outputGain);
+    };
   }
 
   mute() {
@@ -291,8 +309,14 @@ const usePeerConnection = ({
       const stream = event.streams[0];
       try {
         mediaStreamManager.addOutputTrack(stream);
+        // // works
+        // const audio = document.createElement("audio");
+        // audio.srcObject = stream;
+        // audio.autoplay = true;
+        // audio.play();
       } catch (error) {
-        console.log(error);
+        console.error(error);
+        alert(error);
       }
     };
     const handleConnectionStateChange = (event: Event) => {
