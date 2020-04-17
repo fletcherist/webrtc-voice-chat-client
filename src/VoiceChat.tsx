@@ -117,7 +117,7 @@ class MediaStreamManager {
     return this.inputStreamDestination.stream;
   }
   public getOutputStream(): MediaStream {
-    return this.inputStreamDestination.stream;
+    return this.outputStreamDestination.stream;
   }
 
   public async requestMicrophone(): Promise<void> {
@@ -278,11 +278,7 @@ const usePeerConnection = ({
   const mediaStreamManager = useMediaStreamManager();
   const refPeerConnection = useRef<RTCPeerConnection>(
     new RTCPeerConnection({
-      iceServers: [
-        {
-          urls: "stun:stun.l.google.com:19302",
-        },
-      ],
+      iceServers: [{ urls: "stun:stun.l.google.com:19302" }],
     })
   );
   const peerConnection = refPeerConnection.current;
@@ -380,17 +376,18 @@ export const Conference = () => {
   const subscribe = async () => {
     const mediaStream = mediaStreamManager.getInputStream();
     const audioTracks = mediaStream.getAudioTracks();
+    console.log("[subscribe]: audioTracks", audioTracks);
     for (const track of audioTracks) {
       peerConnection.addTrack(track, mediaStream);
     }
+    transport.requestOffer();
   };
 
   useEffect(() => {
     console.log("store", store);
     transport.onOpen(() => {
       console.log("web socket connection is open");
-      subscribe();
-      transport.requestOffer();
+      // subscribe();
     });
     transport.onOffer(async (offer) => {
       await peerConnection.setRemoteDescription(offer);
@@ -461,6 +458,7 @@ export const Conference = () => {
           <button
             onClick={async () => {
               const playOutputTrack = async () => {
+                console.log("playOutputTrack");
                 try {
                   const outputStream = mediaStreamManager.getOutputStream();
                   console.log("refAudioEl.current", refAudioEl.current);
@@ -476,8 +474,8 @@ export const Conference = () => {
                   console.error(error);
                 }
               };
-
               const resumeAudioContext = async () => {
+                console.log("resumeAudioContext", audioContext.state);
                 if (audioContext.state === "suspended") {
                   console.log(
                     "audio context was in suspended state. resuming..."
@@ -485,9 +483,13 @@ export const Conference = () => {
                   await audioContext.resume();
                 }
               };
-              playOutputTrack();
-              resumeAudioContext();
-              setShowConference(true);
+              try {
+                await Promise.all([playOutputTrack(), resumeAudioContext()]);
+                setShowConference(true);
+                await subscribe();
+              } catch (error) {
+                alert(error);
+              }
             }}
             className={css.buttonJoin}
           >
@@ -534,7 +536,7 @@ export const Conference = () => {
     );
   };
   return (
-    <div>
+    <div style={{ width: "100%" }}>
       <audio ref={refAudioEl} />
       {renderContent()}
     </div>
